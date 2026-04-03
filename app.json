@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Haziri",
+    "slug": "chalkpad-attendance",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#16114a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourname.haziri"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#16114a"
+      },
+      "package": "com.yourname.haziri"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a5322b8c-d6cd-4470-a83e-dd709e2420d7"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
