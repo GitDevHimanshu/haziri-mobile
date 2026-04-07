@@ -4,18 +4,23 @@ import {
   ScrollView, Alert, Switch, StatusBar, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getTeacherId, saveTeacherId, getServerUrl, saveServerUrl } from '../api/client';
+import { getTeacherId, saveTeacherId, getServerUrl, saveServerUrl, getTrainerName, saveTrainerName } from '../api/client';
 
 export default function SettingsScreen({ navigation }) {
   const [teacherId,    setTeacherId]    = useState('');
+  const [trainerName,  setTrainerName]  = useState('');
   const [serverUrl,    setServerUrl]    = useState('');
   const [teacherSaved, setTeacherSaved] = useState(false);
+  const [trainerSaved, setTrainerSaved] = useState(false);
   const [urlSaved,     setUrlSaved]     = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState(false);
+  const [editingName,    setEditingName]    = useState(false);
   const [editingUrl,   setEditingUrl]   = useState(false);
   const [testing,      setTesting]      = useState(false);
 
   useEffect(() => {
     getTeacherId().then(id => setTeacherId(id === 'default' ? '' : id.toUpperCase()));
+    getTrainerName().then(name => setTrainerName(name));
     getServerUrl().then(url => setServerUrl(url));
   }, []);
 
@@ -24,7 +29,17 @@ export default function SettingsScreen({ navigation }) {
     if (!v) { Alert.alert('Error', 'Teacher ID cannot be empty.'); return; }
     await saveTeacherId(v);
     setTeacherSaved(true);
+    setEditingTeacher(false);
     setTimeout(() => setTeacherSaved(false), 2000);
+  };
+
+  const saveName = async () => {
+    const v = trainerName.trim();
+    if (!v) { Alert.alert('Error', 'Trainer Name cannot be empty.'); return; }
+    await saveTrainerName(v);
+    setTrainerSaved(true);
+    setEditingName(false);
+    setTimeout(() => setTrainerSaved(false), 2000);
   };
 
   const saveUrl = async () => {
@@ -57,30 +72,83 @@ export default function SettingsScreen({ navigation }) {
         <Text style={s.groupLabel}>Account</Text>
         <View style={s.group}>
           {/* Teacher ID row */}
-          <View style={s.row}>
+        <View style={s.row}>
             <View style={s.rowIcon}><Text style={s.rowIconTxt}>👤</Text></View>
             <View style={s.rowBody}>
               <Text style={s.rowTitle}>Teacher ID</Text>
-              <Text style={s.rowSub}>Identifies your sessions across devices</Text>
-              <View style={s.inputRow}>
-                <TextInput
-                  style={s.input}
-                  value={teacherId}
-                  onChangeText={t => { setTeacherId(t); setTeacherSaved(false); }}
-                  placeholder="e.g. ET018"
-                  placeholderTextColor="#94a3b8"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={saveTeacher}
-                />
-                <TouchableOpacity
-                  style={[s.pill, teacherSaved && s.pillGreen]}
-                  onPress={saveTeacher} activeOpacity={0.8}
-                >
-                  <Text style={s.pillTxt}>{teacherSaved ? '✓' : 'Save'}</Text>
-                </TouchableOpacity>
-              </View>
+              {!editingTeacher ? (
+                <View style={s.editDisplayRow}>
+                  <Text style={s.editDisplayVal}>{teacherId || '(Not set)'}</Text>
+                  <TouchableOpacity style={s.editBtn} onPress={() => setEditingTeacher(true)} activeOpacity={0.8}>
+                    <Text style={s.editBtnTxt}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <Text style={s.rowSub}>Identifies your sessions across devices</Text>
+                  <View style={s.inputRow}>
+                    <TextInput
+                      style={s.input}
+                      value={teacherId}
+                      onChangeText={t => { setTeacherId(t); setTeacherSaved(false); }}
+                      placeholder="e.g. ET018"
+                      placeholderTextColor="#94a3b8"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      onSubmitEditing={saveTeacher}
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      style={[s.pill, teacherSaved && s.pillGreen]}
+                      onPress={saveTeacher} activeOpacity={0.8}
+                    >
+                      <Text style={s.pillTxt}>{teacherSaved ? '✓' : 'Save'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          <View style={s.divider} />
+
+          {/* Trainer Name row */}
+          <View style={s.row}>
+            <View style={s.rowIcon}><Text style={s.rowIconTxt}>🖋️</Text></View>
+            <View style={s.rowBody}>
+              <Text style={s.rowTitle}>Name in Timetable</Text>
+              {!editingName ? (
+                <View style={s.editDisplayRow}>
+                  <Text style={s.editDisplayVal}>{trainerName || '(Not set)'}</Text>
+                  <TouchableOpacity style={s.editBtn} onPress={() => setEditingName(true)} activeOpacity={0.8}>
+                    <Text style={s.editBtnTxt}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <Text style={s.rowSub}>Your exact name from the PDF schedule</Text>
+                  <View style={s.inputRow}>
+                    <TextInput
+                      style={s.input}
+                      value={trainerName}
+                      onChangeText={t => { setTrainerName(t); setTrainerSaved(false); }}
+                      placeholder="e.g. Himanshu Sharma"
+                      placeholderTextColor="#94a3b8"
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      onSubmitEditing={saveName}
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      style={[s.pill, trainerSaved && s.pillGreen]}
+                      onPress={saveName} activeOpacity={0.8}
+                    >
+                      <Text style={s.pillTxt}>{trainerSaved ? '✓' : 'Save'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </View>

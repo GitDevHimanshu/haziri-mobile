@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  View, Text, FlatList, TextInput, TouchableOpacity,
+  View, Text, FlatList, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, ActivityIndicator, RefreshControl,
   StatusBar, Animated, PanResponder, Alert, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fetchSessions, deleteSession, getTeacherId } from '../api/client';
+import { fetchSessions, deleteSession, getTeacherId, getTrainerName, getTimetable, uploadTimetablePdf, saveTimetable } from '../api/client';
+import * as DocumentPicker from 'expo-document-picker';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -52,8 +53,8 @@ function getHeaderDate() {
   return days[d.getDay()] + ', ' + d.getDate() + ' ' + months[d.getMonth()];
 }
 
-// ─── App Header ───────────────────────────────────────────────────
-function AppHeader({ onSettings }) {
+// ─── AppHeader ───────────────────────────────────────────────────
+function AppHeader({ onSettings, onAddPdf, parsing }) {
   const [teacherId, setTeacherId] = useState('');
   useEffect(() => {
     getTeacherId().then(id => {
@@ -73,9 +74,14 @@ function AppHeader({ onSettings }) {
         </View>
         <Text style={g.greetText}>{getGreeting()} · {getHeaderDate()}</Text>
       </View>
-      <TouchableOpacity style={g.settingsBtn} onPress={onSettings} activeOpacity={0.7}>
-        <Text style={g.settingsIcon}>⚙</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        <TouchableOpacity style={g.settingsBtn} onPress={onAddPdf} activeOpacity={0.7} disabled={parsing}>
+          {parsing ? <ActivityIndicator size="small" color="#e9d5ff" /> : <Text style={g.settingsIcon}>+</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity style={g.settingsBtn} onPress={onSettings} activeOpacity={0.7}>
+          <Text style={g.settingsIcon}>⚙</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -308,6 +314,9 @@ export default function HomeScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [timetable, setTimetable] = useState([]);
+  const [parsing, setParsing] = useState(false);
+  const [showFullSchedule, setShowFullSchedule] = useState(false);
   const [undoVisible, setUndoVisible] = useState(false);
   const [undoSession, setUndoSession] = useState(null);
   const undoTimer = useRef(null);
@@ -325,6 +334,8 @@ export default function HomeScreen({ navigation }) {
     try {
       const res = await fetchSessions({ limit: 1000 });
       setAllSessions(res.sessions || []);
+      const tt = await getTimetable();
+      setTimetable(tt || []);
     } catch (e) { setError(e.message || 'Could not connect.'); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -332,6 +343,42 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => { load(); }, [load]);
 
   const onRefresh = () => { setRefreshing(true); load(true); };
+
+  const startUploadTimetable = async () => {
+    const name = await getTrainerName();
+    if (!name) {
+      Alert.alert('Setup Required', 'Please set "Name in Timetable" in Settings first.');
+      return;
+    }
+    
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        setParsing(true);
+        const fileUri = res.assets[0].uri;
+        
+        try {
+          const resp = await uploadTimetablePdf(fileUri, name);
+          if (resp.success && resp.entries) {
+            await saveTimetable(resp.entries);
+            setTimetable(resp.entries);
+            Alert.alert('Success', `Extracted ${resp.entries.length} classes!`);
+          } else {
+            Alert.alert('Notice', 'No classes found or parse failed.');
+          }
+        } catch (serverErr) {
+          Alert.alert('Server Error', serverErr.message);
+        }
+        setParsing(false);
+      }
+    } catch(e) {
+      Alert.alert('Error', 'Failed to read PDF');
+      setParsing(false);
+    }
+  };
 
   const q = search.trim().toLowerCase();
   const searchResults = q ? allSessions.filter(s =>
@@ -402,7 +449,11 @@ export default function HomeScreen({ navigation }) {
 
       {/* Dark top section */}
       <View style={g.darkSection}>
-        <AppHeader onSettings={() => navigation.navigate('Settings')} />
+        <AppHeader 
+          onSettings={() => navigation.navigate('Settings')} 
+          onAddPdf={startUploadTimetable}
+          parsing={parsing}
+        />
         <View style={g.searchWrap}>
           <View style={g.searchBar}>
             <Text style={g.searchIco}>⌕</Text>
@@ -419,6 +470,50 @@ export default function HomeScreen({ navigation }) {
         </View>
         <DateNavBar date={currentDate} hasFuture={hasFuture} onOlder={goOlder} onNewer={goNewer} />
       </View>
+
+      {/* Timetable Section */}
+      {q.length === 0 && timetable.length > 0 && (
+        <View style={g.ttSection}>
+          <View style={g.ttHeader}>
+            <Text style={g.ttTitle}>E X T R A C T E D  S C H E D U L E</Text>
+            <TouchableOpacity onPress={() => setShowFullSchedule(!showFullSchedule)}>
+              <Text style={g.ttToggle}>{showFullSchedule ? 'Hide All' : 'View Full'}</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView 
+            horizontal={!showFullSchedule} 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={showFullSchedule ? g.ttListVertical : g.ttListHorizontal}
+          >
+            {timetable
+              .filter(item => showFullSchedule || item.dayOfWeek === DAYS_FULL[currentDate.getDay()])
+              .map((item, idx) => (
+                <View key={idx} style={[g.ttCard, showFullSchedule && g.ttCardFull]}>
+                  <View style={g.ttCardTop}>
+                    <Text style={g.ttDay}>{item.dayOfWeek.substring(0,3).toUpperCase()}</Text>
+                    <Text style={g.ttTime}>{item.timeRange}</Text>
+                  </View>
+                  <Text style={g.ttSubject} numberOfLines={1}>{item.subject}</Text>
+                  {!!item.group && (
+                    <View style={g.ttGroupRow}>
+                      <Text style={g.ttGroupTxt}>{item.group}</Text>
+                    </View>
+                  )}
+                  <View style={g.ttCardBot}>
+                    <Text style={g.ttBatch} numberOfLines={1}>{item.batch}</Text>
+                    <Text style={g.ttRoom}>{item.roomCode || 'TBD'}</Text>
+                  </View>
+                </View>
+              ))}
+            {timetable.filter(item => !showFullSchedule && item.dayOfWeek === DAYS_FULL[currentDate.getDay()]).length === 0 && !showFullSchedule && (
+              <View style={g.ttEmpty}>
+                <Text style={g.ttEmptyTxt}>No classes for {DAYS_FULL[currentDate.getDay()]}</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Sessions list */}
       {q.length > 0 ? (
@@ -585,4 +680,24 @@ const g = StyleSheet.create({
   errMsg: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 20 },
   retryBtn: { backgroundColor: 'rgba(167,139,250,0.2)', borderWidth: 1, borderColor: 'rgba(167,139,250,0.4)', paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12 },
   retryTxt: { color: '#c4b5fd', fontWeight: '700', fontSize: 14 },
+
+  ttSection: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(109,94,196,0.08)' },
+  ttHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 10 },
+  ttTitle: { fontSize: 9, fontWeight: '900', color: '#6d28d9', letterSpacing: 1.5, opacity: 0.6 },
+  ttToggle: { fontSize: 11, fontWeight: '700', color: '#7c3aed' },
+  ttListHorizontal: { paddingHorizontal: 16, gap: 12, paddingBottom: 4 },
+  ttListVertical: { paddingHorizontal: 16, gap: 10 },
+  ttCard: { backgroundColor: '#fff', width: 140, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(109,94,196,0.12)', shadowColor: '#4c1d95', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  ttCardFull: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ttCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  ttDay: { fontSize: 9, fontWeight: '900', color: '#7c3aed', backgroundColor: '#f5f3ff', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
+  ttTime: { fontSize: 10, fontWeight: '700', color: '#6d6a9c' },
+  ttSubject: { fontSize: 12, fontWeight: '800', color: '#1e1b4b', marginBottom: 2 },
+  ttGroupRow: { backgroundColor: 'rgba(109,94,196,0.1)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, alignSelf: 'flex-start', marginBottom: 6 },
+  ttGroupTxt: { fontSize: 9, fontWeight: '700', color: '#6d28d9', letterSpacing: 0.3 },
+  ttCardBot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  ttBatch: { flex: 1, fontSize: 10, fontWeight: '600', color: '#9490c0', marginRight: 4 },
+  ttRoom: { fontSize: 10, fontWeight: '900', color: '#6d28d9', backgroundColor: '#f5f3ff', paddingHorizontal: 4, borderRadius: 4 },
+  ttEmpty: { height: 60, width: SCREEN_W - 32, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(109,94,196,0.05)', borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(109,94,196,0.2)' },
+  ttEmptyTxt: { fontSize: 11, color: '#9490c0', fontWeight: '500' },
 });
