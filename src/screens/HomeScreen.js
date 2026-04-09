@@ -379,6 +379,11 @@ export default function HomeScreen({ navigation, route }) {
       ]);
       setAllSessions(res.sessions || []);
       setTimetable(ttable || []);
+      
+      // Auto-refresh notifications if we have a timetable
+      if (ttable && ttable.length > 0) {
+        scheduleTimetableNotifications(ttable);
+      }
     } catch (e) { setError(e.message || 'Could not connect.'); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);

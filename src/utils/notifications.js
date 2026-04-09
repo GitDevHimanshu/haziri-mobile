@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import { getTimetable } from '../api/client';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -14,7 +15,7 @@ export async function requestNotificationPermissions() {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('class_reminders', {
       name: 'Class Reminders',
-      description: 'Upcoming class notifications from your timetable',
+      description: 'Upcoming class alarms from your timetable',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#4f46e5',
@@ -35,9 +36,20 @@ export async function requestNotificationPermissions() {
   }
 }
 
-export async function scheduleTimetableNotifications(timetableEntries) {
+/**
+ * Schedules individual alarms for every class in the timetable.
+ * Now reads directly from AsyncStorage (ground truth) as requested.
+ */
+export async function scheduleTimetableNotifications(passedEntries = null) {
   // Cancel all old notifications before scheduling fresh ones
   await Notifications.cancelAllScheduledNotificationsAsync();
+
+  // If no entries passed, or to ensure we have ground truth, read from Async Store
+  const timetableEntries = passedEntries || (await getTimetable());
+
+  if (!timetableEntries || timetableEntries.length === 0) {
+    return 0;
+  }
 
   const dayMap = {
     'sunday': 1, 'monday': 2, 'tuesday': 3, 'wednesday': 4,
@@ -47,8 +59,7 @@ export async function scheduleTimetableNotifications(timetableEntries) {
   const NOTIFY_MINUTES_BEFORE = 10;
   let scheduleCount = 0;
 
-  // Track scheduled triggers (keyed by ORIGINAL start time) to avoid duplicates
-  // e.g., if timetable has two entries for the same class due to parsing splits
+  // Track scheduled triggers to avoid duplicates
   const scheduledKeys = new Set();
 
   for (const entry of timetableEntries) {
@@ -62,14 +73,15 @@ export async function scheduleTimetableNotifications(timetableEntries) {
     const origHour = dateObj.getHours();
     const origMinute = dateObj.getMinutes();
 
-    // Deduplicate on ORIGINAL start time + day (before any offset adjustment)
-    const triggerKey = `${weekday}_${origHour}_${origMinute}_${entry.subject.replace(/\s+/g, '').toLowerCase()}`;
+    // Deduplicate logic
+    const triggerKey = `${weekday}_${origHour}_${origMinute}_${entry.subject}_${entry.batch || ''}_${entry.group || ''}`.replace(/\s+/g, '').toLowerCase();
     if (scheduledKeys.has(triggerKey)) continue;
     scheduledKeys.add(triggerKey);
 
-    // Calculate the notification time (10 minutes before class)
+    // Calculate exactly 10 minutes prior
     let notifyHour = origHour;
     let notifyMinute = origMinute - NOTIFY_MINUTES_BEFORE;
+    
     if (notifyMinute < 0) {
       notifyMinute += 60;
       notifyHour -= 1;
@@ -78,23 +90,24 @@ export async function scheduleTimetableNotifications(timetableEntries) {
       notifyHour = 23;
     }
 
-    const roomText = entry.roomCode ? ` · ${entry.roomCode}` : '';
-    const groupText = entry.group ? ` · ${entry.group}` : '';
     const startTimeStr = dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const roomInfo = entry.roomCode ? `Room: ${entry.roomCode}` : '';
+    const batchInfo = entry.batch ? `Batch: ${entry.batch}` : '';
+    const groupInfo = entry.group ? ` (${entry.group})` : '';
 
-    // Unique ID: day + original time + subject slug
-    const slug = entry.subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    const slug = entry.subject.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
     const notificationId = `class_${weekday}_${origHour}${origMinute}_${slug}`;
 
     try {
       await Notifications.scheduleNotificationAsync({
         identifier: notificationId,
         content: {
-          title: `📚 ${entry.subject}`,
-          body: `Starts at ${startTimeStr}${roomText}${groupText}`,
+          title: `⏰ CLASS STARTING: ${entry.subject}`,
+          body: `Starts at ${startTimeStr} in 10 mins\n${batchInfo}${groupInfo}\n${roomInfo}`,
           sound: 'default',
           priority: Notifications.AndroidNotificationPriority.MAX,
           channelId: 'class_reminders',
+          data: { type: 'class_reminder', entry },
         },
         trigger: {
           weekday,
@@ -105,11 +118,7 @@ export async function scheduleTimetableNotifications(timetableEntries) {
       });
 
       scheduleCount++;
-
-      // Tiny throttle every 5 entries to avoid OS scheduling limits
-      if (scheduleCount % 5 === 0) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+      if (scheduleCount % 5 === 0) await new Promise(resolve => setTimeout(resolve, 50));
     } catch (err) {
       console.warn(`[Notification] Failed to schedule "${entry.subject}" on day ${weekday}:`, err);
     }
@@ -117,3 +126,6 @@ export async function scheduleTimetableNotifications(timetableEntries) {
 
   return scheduleCount;
 }
+
+
+
