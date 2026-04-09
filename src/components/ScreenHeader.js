@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 
-export default function ScreenHeader({ title }) {
+export default function ScreenHeader({ title, subtext }) {
   const { isDark, toggleTheme, colors } = useTheme();
   const [teacherId, setTeacherId] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -52,7 +52,10 @@ export default function ScreenHeader({ title }) {
     <View style={[h.headerContainer, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={colors.statusBar} backgroundColor={colors.bg} />
       <View style={h.appHeader}>
-        <Text style={[h.appName, { color: colors.accent }]}>{title || 'Haziri'}</Text>
+        <View style={h.leftSide}>
+          <Text style={[h.appName, { color: isDark ? colors.text : colors.primary }]}>{title || 'Haziri'}</Text>
+          {subtext && <Text style={[h.appSub, { color: colors.textSecondary }]}>{subtext}</Text>}
+        </View>
         
         <View style={h.rightWrap}>
           <TouchableOpacity 
@@ -68,7 +71,7 @@ export default function ScreenHeader({ title }) {
             onPress={() => setModalVisible(true)}
             activeOpacity={0.8}
           >
-            <Text style={[h.teacherBadgeTxt, { color: colors.accent }]}>{teacherId}</Text>
+            <Text style={[h.teacherBadgeTxt, { color: isDark ? colors.text : colors.primary }]}>{teacherId}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -145,7 +148,10 @@ const h = StyleSheet.create({
     paddingTop: 18, 
     paddingBottom: 10,
   },
-  appName: { fontSize: 26, fontWeight: '900', letterSpacing: -1.2 },
+  appName: { fontSize: 24, fontWeight: '900', letterSpacing: -1.2 },
+  appSub: { fontSize: 11, fontWeight: '700', marginTop: -2, opacity: 0.8 },
+  subRow: { flexDirection: 'row', alignItems: 'center' },
+  leftSide: { flex: 1 },
   rightWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   
   themeToggle: {

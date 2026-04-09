@@ -38,7 +38,7 @@ export default function SetupScreen({ onDone }) {
           <View style={[s.logoCircle, { backgroundColor: colors.primary, shadowColor: colors.primary }]}>
             <Text style={s.logoIcon}>✓</Text>
           </View>
-          <Text style={[s.appName, { color: colors.primary }]}>Haziri</Text>
+          <Text style={[s.appName, { color: isDark ? colors.text : colors.primary }]}>Haziri</Text>
           <Text style={[s.appSub, { color: colors.textSecondary }]}>Attendance Tracker</Text>
         </View>
 

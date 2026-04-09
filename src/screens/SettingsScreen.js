@@ -9,6 +9,51 @@ import ScreenHeader from '../components/ScreenHeader';
 import { useTheme } from '../context/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 
+const Row = ({ label, value, onEdit, isEditing, onChange, onSave, saved, placeholder, icon }) => {
+  const { colors, isDark } = useTheme();
+  return (
+    <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={s.secHeader}>
+        <View style={s.secTitleRow}>
+          <Feather name={icon} size={16} color={colors.primary} style={s.secIcon} />
+          <Text style={[s.secLabel, { color: colors.textSecondary }]}>{label}</Text>
+        </View>
+        {!isEditing && (
+          <TouchableOpacity onPress={onEdit}>
+            <Text style={[s.editBtn, { color: colors.primary }]}>Edit</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      
+      {isEditing ? (
+        <View style={s.editWrap}>
+          <TextInput
+            style={[s.input, { color: colors.text, backgroundColor: isDark ? colors.bg : '#f8fafc', borderColor: colors.border }]}
+            value={value}
+            onChangeText={onChange}
+            autoFocus
+            placeholder={placeholder}
+            placeholderTextColor={colors.textMuted}
+          />
+          <View style={s.btnRow}>
+             <TouchableOpacity style={[s.cancelBtn, { borderColor: colors.border }]} onPress={() => onEdit()}>
+               <Text style={[s.cancelBtnTxt, { color: colors.textSecondary }]}>Cancel</Text>
+             </TouchableOpacity>
+             <TouchableOpacity style={[s.saveBtn, { backgroundColor: colors.primary }]} onPress={onSave}>
+               <Text style={s.saveBtnTxt}>Save Changes</Text>
+             </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={s.valRow}>
+          <Text style={[s.val, { color: colors.text }]}>{value || 'Not set'}</Text>
+          {saved && <Text style={s.saved}>✓ Saved</Text>}
+        </View>
+      )}
+    </View>
+  );
+};
+
 export default function SettingsScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const [teacherId,    setTeacherId]    = useState('');
@@ -67,47 +112,7 @@ export default function SettingsScreen({ navigation }) {
     } finally { setTesting(false); }
   };
 
-  const Row = ({ label, value, onEdit, isEditing, onChange, onSave, saved, placeholder, icon }) => (
-    <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={s.secHeader}>
-        <View style={s.secTitleRow}>
-          <Feather name={icon} size={16} color={colors.primary} style={s.secIcon} />
-          <Text style={[s.secLabel, { color: colors.textSecondary }]}>{label}</Text>
-        </View>
-        {!isEditing && (
-          <TouchableOpacity onPress={onEdit}>
-            <Text style={[s.editBtn, { color: colors.primary }]}>Edit</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-      
-      {isEditing ? (
-        <View style={s.editWrap}>
-          <TextInput
-            style={[s.input, { color: colors.text, backgroundColor: isDark ? colors.bg : '#f8fafc', borderColor: colors.border }]}
-            value={value}
-            onChangeText={onChange}
-            autoFocus
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-          />
-          <View style={s.btnRow}>
-             <TouchableOpacity style={[s.cancelBtn, { borderColor: colors.border }]} onPress={() => onEdit()}>
-               <Text style={[s.cancelBtnTxt, { color: colors.textSecondary }]}>Cancel</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={[s.saveBtn, { backgroundColor: colors.primary }]} onPress={onSave}>
-               <Text style={s.saveBtnTxt}>Save Changes</Text>
-             </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <View style={s.valRow}>
-          <Text style={[s.val, { color: colors.text }]}>{value || 'Not set'}</Text>
-          {saved && <Text style={s.saved}>✓ Saved</Text>}
-        </View>
-      )}
-    </View>
-  );
+
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>

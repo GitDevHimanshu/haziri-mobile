@@ -3,12 +3,14 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, ActivityIndicator, RefreshControl,
   StatusBar, Animated, PanResponder, Alert, Dimensions, BackHandler,
+  Modal, Pressable
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { fetchSessions, deleteSession, getTeacherId, getTrainerName, getTimetable, saveTimetable } from '../api/client';
 import * as DocumentPicker from 'expo-document-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
 import PdfParserWebView from '../components/PdfParserWebView';
 import { requestNotificationPermissions, scheduleTimetableNotifications } from '../utils/notifications';
@@ -17,8 +19,98 @@ import FloatingTabBar from '../components/FloatingTabBar';
 import ScreenHeader from '../components/ScreenHeader';
 import { HomeScreenSkeleton } from '../components/SkeletonLoader';
 import { useTheme } from '../context/ThemeContext';
+import DetailModal from '../components/DetailModal';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const SCREEN_H = Dimensions.get('window').height;
+const SCREEN_W = Dimensions.get('window').width;
+
+// ─── Custom Calendar Modal ───────────────────────────────────────
+function CalendarModal({ visible, selectedDate, onClose, onSelect }) {
+  const { colors, isDark } = useTheme();
+  const [viewDate, setViewDate] = useState(new Date(selectedDate));
+  
+  const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+  const firstDay = (y, m) => new Date(y, m, 1).getDay();
+
+  const month = viewDate.getMonth();
+  const year = viewDate.getFullYear();
+  const monthName = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const days = [];
+  const totalDays = daysInMonth(year, month);
+  const offset = firstDay(year, month);
+
+  for (let i = 0; i < offset; i++) days.push(null);
+  for (let i = 1; i <= totalDays; i++) days.push(new Date(year, month, i));
+
+  const changeMonth = (delta) => {
+    const d = new Date(viewDate);
+    d.setMonth(d.getMonth() + delta);
+    if (d > new Date()) return;
+    setViewDate(d);
+  };
+
+  const isSelected = (d) => d && d.toDateString() === selectedDate.toDateString();
+  const isFuture = (d) => d && d > new Date();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={{ backgroundColor: colors.card, borderRadius: 32, padding: 20, borderWidth: 1, borderColor: colors.border }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <TouchableOpacity onPress={() => changeMonth(-1)} style={{ padding: 10 }}>
+              <Feather name="chevron-left" size={20} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>{monthName.toUpperCase()}</Text>
+            <TouchableOpacity onPress={() => changeMonth(1)} style={{ padding: 10 }}>
+              <Feather name="chevron-right" size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+            {['S','M','T','W','T','F','S'].map((d, i) => (
+              <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '900', color: colors.textSecondary }}>{d}</Text>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {days.map((d, i) => {
+              const selected = isSelected(d);
+              const disabled = !d || isFuture(d);
+              return (
+                <TouchableOpacity 
+                  key={i} 
+                  disabled={disabled}
+                  onPress={() => { onSelect(d); onClose(); }}
+                  style={{ 
+                    width: '14.28%', height: 40, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: selected ? colors.primary : 'transparent',
+                    borderRadius: 12,
+                    opacity: disabled ? 0.3 : 1
+                  }}
+                >
+                  <Text style={{ 
+                    fontSize: 14, fontWeight: '800', 
+                    color: selected ? '#fff' : (disabled ? colors.textMuted : colors.text) 
+                  }}>{d ? d.getDate() : ''}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity 
+            onPress={() => { onSelect(new Date()); onClose(); }}
+            style={{ marginTop: 20, alignItems: 'center', paddingVertical: 10 }}
+          >
+            <Text style={{ fontWeight: '900', color: isDark ? '#fff' : colors.primary, fontSize: 13, textDecorationLine: 'underline', letterSpacing: 0.5 }}>GO TO TODAY</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -288,7 +380,7 @@ function UpcomingClassCard({ item }) {
   );
 }
 
-function DateNavBar({ date, hasFuture, onOlder, onNewer }) {
+function DateNavBar({ date, hasFuture, onOlder, onNewer, onPressCenter }) {
   const { colors, isDark } = useTheme();
   const label = formatLabel(date);
   const isToday = label === 'Today';
@@ -298,10 +390,10 @@ function DateNavBar({ date, hasFuture, onOlder, onNewer }) {
         <TouchableOpacity style={g.pagerArrow} onPress={onOlder}>
           <Feather name="chevron-left" size={18} color={colors.textMuted} />
         </TouchableOpacity>
-        <View style={g.pagerCenter}>
+        <TouchableOpacity style={g.pagerCenter} onPress={onPressCenter} activeOpacity={0.7}>
           <Text style={[g.pagerLabel, { color: isToday ? colors.accent : colors.text }]}>{label.toUpperCase()}</Text>
           <Text style={[g.pagerSub, { color: colors.textSecondary }]}>{date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-        </View>
+        </TouchableOpacity>
         <TouchableOpacity style={g.pagerArrow} onPress={onNewer} disabled={!hasFuture}>
           <Feather name="chevron-right" size={18} color={hasFuture ? colors.textMuted : 'transparent'} />
         </TouchableOpacity>
@@ -320,6 +412,9 @@ export default function HomeScreen({ navigation, route }) {
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [detailVisible, setDetailVisible] = useState(false);
   const parserRef = useRef(null);
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -435,7 +530,11 @@ export default function HomeScreen({ navigation, route }) {
   });
 
   const currentKey = toDMY(currentDate);
-  const currentSessions = sessionMap[currentKey] || [];
+  const currentSessions = (sessionMap[currentKey] || []).sort((a, b) => {
+    const p1 = (a.periods && a.periods.length > 0) ? parseInt(a.periods[0], 10) : 99;
+    const p2 = (b.periods && b.periods.length > 0) ? parseInt(b.periods[0], 10) : 99;
+    return p1 - p2;
+  });
   const hasFuture = currentDate.getTime() < today.getTime();
   const isTodayView = currentDate.getTime() === today.getTime();
 
@@ -462,6 +561,15 @@ export default function HomeScreen({ navigation, route }) {
   const goOlder = () => animateTo('right', addDays(currentDate, -1));
   const goNewer = () => { if (hasFuture) animateTo('left', addDays(currentDate, 1)); };
 
+  const onDateChange = (event, date) => {
+    setShowPicker(false);
+    if (date) {
+      const diff = date.getTime() - currentDate.getTime();
+      const dir = diff > 0 ? 'left' : 'right';
+      animateTo(dir, date);
+    }
+  };
+
   const pagePan = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, gg) => !cardSwiping.current && Math.abs(gg.dx) > 40 && Math.abs(gg.dy) < 30,
     onPanResponderRelease: (_, gg) => {
@@ -480,7 +588,9 @@ export default function HomeScreen({ navigation, route }) {
   if (loading && !refreshing) return (
     <SafeAreaView style={[g.safe, { backgroundColor: colors.bg }]} edges={['bottom']}>
       <StatusBar barStyle={colors.statusBar} backgroundColor={colors.bg} />
-      <ScreenHeader subtext={getGreeting() + ' · ' + getHeaderDate()} />
+      <ScreenHeader 
+        subtext={getGreeting() + ' · ' + getHeaderDate()} 
+      />
       <HomeScreenSkeleton />
     </SafeAreaView>
   );
@@ -501,8 +611,10 @@ export default function HomeScreen({ navigation, route }) {
       
       {!searchOpen && (
         <>
-          <ScreenHeader subtext={getGreeting() + ' · ' + getHeaderDate()} />
-          <DateNavBar date={currentDate} hasFuture={hasFuture} onOlder={goOlder} onNewer={goNewer} />
+          <ScreenHeader 
+            subtext={getGreeting() + ' · ' + getHeaderDate()} 
+          />
+          <DateNavBar date={currentDate} hasFuture={hasFuture} onOlder={goOlder} onNewer={goNewer} onPressCenter={() => setShowPicker(true)} />
         </>
       )}
 
@@ -511,7 +623,7 @@ export default function HomeScreen({ navigation, route }) {
           visible={searchOpen} 
           onClose={() => setSearchOpen(false)} 
           sessions={allSessions}
-          onPress={sess => navigation.navigate('Detail', { session: sess })}
+          onPress={sess => { setSelectedSession(sess); setDetailVisible(true); }}
           onDelete={handleDelete}
         />
       ) : (
@@ -531,7 +643,7 @@ export default function HomeScreen({ navigation, route }) {
             }
             renderItem={({ item }) => (
               <SessionCard session={item}
-                onPress={sess => navigation.navigate('Detail', { session: sess })}
+                onPress={sess => { setSelectedSession(sess); setDetailVisible(true); }}
                 onDelete={handleDelete}
                 onSwipeStart={() => { cardSwiping.current = true; }}
                 onSwipeEnd={() => { cardSwiping.current = false; }} />
@@ -557,6 +669,23 @@ export default function HomeScreen({ navigation, route }) {
       )}
 
       <PdfParserWebView ref={parserRef} onResult={handleParseResult} onError={(e) => { setParsing(false); Alert.alert('Parse Error', e.message); }} />
+
+      <DetailModal 
+        visible={detailVisible} 
+        session={selectedSession} 
+        onClose={() => setDetailVisible(false)} 
+      />
+
+      <CalendarModal 
+        visible={showPicker}
+        selectedDate={currentDate}
+        onClose={() => setShowPicker(false)}
+        onSelect={(date) => {
+          const diff = date.getTime() - currentDate.getTime();
+          const dir = diff > 0 ? 'left' : 'right';
+          animateTo(dir, date);
+        }}
+      />
     </SafeAreaView>
   );
 }

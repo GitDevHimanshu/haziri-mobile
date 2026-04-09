@@ -76,7 +76,7 @@ export default function TimetableScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {DAYS_FULL.map((day) => {
-          const dayClasses = grouped[day];
+          const dayClasses = (grouped[day] || []).sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
           if (dayClasses.length === 0) return null;
 
           const isToday = day === todayName;
