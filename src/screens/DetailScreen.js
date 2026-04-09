@@ -1,47 +1,56 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, ActivityIndicator, RefreshControl, StatusBar,
+  StyleSheet, ActivityIndicator, RefreshControl, StatusBar, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchSessionById } from '../api/client';
+import { useTheme } from '../context/ThemeContext';
+import { Feather } from '@expo/vector-icons';
 
-const GLASS      = 'rgba(255,255,255,0.12)';
-const GLASS_BDR  = 'rgba(255,255,255,0.20)';
-const FILTERS    = ['all', 'present', 'absent'];
-
-// ── Filter Tab ────────────────────────────────────────────────────
+// ── Segmented Filter Tab ──────────────────────────────────────────
 function FilterTab({ label, count, active, onPress }) {
+  const { colors, isDark } = useTheme();
   return (
     <TouchableOpacity
-      style={[s.tab, active && s.tabActive]}
+      style={[
+        s.tab, 
+        { borderColor: colors.border },
+        active && { backgroundColor: colors.primary, borderColor: colors.primary }
+      ]}
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Text style={[s.tabTxt, active && s.tabTxtActive]}>{label}</Text>
-      <View style={[s.tabBadge, active && s.tabBadgeActive]}>
-        <Text style={[s.tabBadgeTxt, active && s.tabBadgeTxtActive]}>{count}</Text>
+      <Text style={[s.tabTxt, { color: colors.textSecondary }, active && { color: '#fff' }]}>{label}</Text>
+      <View style={[
+        s.tabBadge, 
+        { backgroundColor: isDark ? colors.bg : 'rgba(0,0,0,0.05)' },
+        active && { backgroundColor: 'rgba(255,255,255,0.2)' }
+      ]}>
+        <Text style={[s.tabBadgeTxt, { color: colors.textSecondary }, active && { color: '#fff' }]}>{count}</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-// ── Student Row ───────────────────────────────────────────────────
+// ── Elegant Student Row ───────────────────────────────────────────
 function StudentRow({ student, index }) {
+  const { colors, isDark } = useTheme();
   const isAbsent = student.status === 'A';
   return (
-    <View style={s.row}>
-      {/* Serial number */}
-      <Text style={s.serial}>{index + 1}</Text>
-
-      {/* Name + Roll */}
+    <View style={[s.row, { borderBottomColor: colors.border }]}>
+      <Text style={[s.serial, { color: colors.textMuted }]}>{index + 1}</Text>
       <View style={{ flex: 1 }}>
-        <Text style={s.studentName} numberOfLines={1}>{student.roll || '—'}</Text>
+        <Text style={[s.studentName, { color: colors.text }]} numberOfLines={1}>{student.roll || '—'}</Text>
       </View>
-
-      {/* Status pill */}
-      <View style={[s.statusPill, isAbsent ? s.pillAbsent : s.pillPresent]}>
-        <Text style={[s.pillTxt, isAbsent ? s.pillTxtAbsent : s.pillTxtPresent]}>
+      <View style={[
+        s.statusPill, 
+        { backgroundColor: isAbsent ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)' }
+      ]}>
+        <Text style={[
+          s.pillTxt, 
+          { color: isAbsent ? colors.absent : colors.present }
+        ]}>
           {isAbsent ? '✗' : '✓'}
         </Text>
       </View>
@@ -49,25 +58,25 @@ function StudentRow({ student, index }) {
   );
 }
 
-// ── Screen ────────────────────────────────────────────────────────
+// ── Optimized Screen ──────────────────────────────────────────────
 export default function DetailScreen({ route, navigation }) {
+  const { colors, isDark } = useTheme();
   const preview = route.params?.session;
 
   const [session,    setSession]    = useState(preview || null);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error,      setError]      = useState(null);
-  const [filter,     setFilter]     = useState('all');
+  const [filter,     setFilter]     = useState('ALL'); // ALL, P, A
 
   const load = useCallback(async (isRefresh = false) => {
-    if (!preview?._id) { setLoading(false); return; }
     if (!isRefresh) setLoading(true);
-    setError(null);
+    if (!preview?._id) return;
     try {
       const data = await fetchSessionById(preview._id);
       setSession(data);
-    } catch (e) {
-      setError(e.message || 'Could not load session.');
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -75,216 +84,151 @@ export default function DetailScreen({ route, navigation }) {
   }, [preview?._id]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (session?.group) navigation.setOptions({ title: session.group });
-  }, [session?.group]);
 
   const onRefresh = () => { setRefreshing(true); load(true); };
 
+  const students = session?.allStudents || [];
+  const pList = students.filter(s => s.status === 'P');
+  const aList = students.filter(s => s.status === 'A');
 
+  const filteredData = 
+    filter === 'P' ? pList :
+    filter === 'A' ? aList : students;
 
-
-
-  if (loading && !refreshing) return (
-    <View style={s.center}>
-      <ActivityIndicator size="large" color="#a78bfa" />
-      <Text style={s.loadTxt}>Loading…</Text>
-    </View>
-  );
-
-  if (error) return (
-    <View style={s.center}>
-      <Text style={s.errTitle}>Error</Text>
-      <Text style={s.errMsg}>{error}</Text>
-      <TouchableOpacity style={s.retryBtn} onPress={load}>
-        <Text style={s.retryTxt}>Retry</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  if (!session) return (
-    <View style={s.center}>
-      <Text style={s.errMsg}>No session data available.</Text>
-    </View>
-  );
-
-  const allStudents  = session.allStudents || [];
-  const presentCount = session.presentCount ?? allStudents.filter(st => st.status === 'P').length;
-  const absentCount  = (session.absentRolls || []).length;
-  const total        = session.totalStudents ?? allStudents.length;
-  const pct          = total > 0 ? Math.round((presentCount / total) * 100) : 0;
-  const periods      = (session.periods || []).join(', ') || '—';
-
-  const filtered = filter === 'all'     ? allStudents
-                 : filter === 'present' ? allStudents.filter(st => st.status === 'P')
-                 :                        allStudents.filter(st => st.status === 'A');
-
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 100 }} />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={s.safe} edges={['bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#312e81" />
-
-      {/* ── Fixed top section ── */}
-      <View style={s.topSection}>
-
-        {/* Session info row */}
-        <View style={s.infoRow}>
-          <View style={s.infoPill}>
-            <Text style={s.infoPillTxt}>📅  {session.date || '—'}</Text>
-          </View>
-          <View style={s.infoPill}>
-            <Text style={s.infoPillTxt}>Period  {periods}</Text>
-          </View>
-        </View>
-
-        {/* Subject */}
-        <Text style={s.subject} numberOfLines={1}>{session.subject || '—'}</Text>
-        {session.class ? <Text style={s.classLbl}>{session.class}</Text> : null}
-
-        {/* Progress bar */}
-        <View style={s.barRow}>
-          <View style={s.barBg}>
-            <View style={[s.barFill, { width: pct + '%' }]} />
-          </View>
-          <Text style={s.barPct}>{pct}%</Text>
-        </View>
-
-        {/* Stat pills row */}
-        <View style={s.statsRow}>
-          <View style={s.statPill}>
-            <Text style={s.statVal}>{total}</Text>
-            <Text style={s.statLbl}>Total</Text>
-          </View>
-          <View style={s.statPill}>
-            <Text style={[s.statVal, { color: '#6ee7b7' }]}>{presentCount}</Text>
-            <Text style={s.statLbl}>Present</Text>
-          </View>
-          <View style={s.statPill}>
-            <Text style={[s.statVal, { color: absentCount > 0 ? '#fca5a5' : '#c4b5fd' }]}>{absentCount}</Text>
-            <Text style={s.statLbl}>Absent</Text>
-          </View>
+    <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={colors.statusBar} backgroundColor={colors.bg} />
+      
+      {/* Dynamic Header */}
+      <View style={[s.header, { backgroundColor: colors.bg }]}>
+        <TouchableOpacity style={[s.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.goBack()}>
+          <Feather name="chevron-left" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={s.headerTitleWrap}>
+          <Text style={[s.headerTitle, { color: colors.text }]}>Attendance Details</Text>
+          <Text style={[s.headerDate, { color: colors.textSecondary }]}>{session?.date || '—'}</Text>
         </View>
       </View>
 
-      {/* ── Fixed filter tabs ── */}
-      <View style={s.tabBar}>
-        <FilterTab label="All"     count={allStudents.length} active={filter==='all'}     onPress={() => setFilter('all')} />
-        <FilterTab label="Present" count={presentCount}       active={filter==='present'} onPress={() => setFilter('present')} />
-        <FilterTab label="Absent"  count={absentCount}        active={filter==='absent'}  onPress={() => setFilter('absent')} />
-      </View>
+      <FlatList
+        data={filteredData}
+        keyExtractor={(item, i) => item._id || i.toString()}
+        contentContainerStyle={s.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        ListHeaderComponent={
+          <>
+            <View style={[s.mainCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+               <View style={s.cardTop}>
+                  <View style={[s.subjectBadge, { backgroundColor: isDark ? colors.bg : '#f0f9ff', flexShrink: 1 }]}>
+                     <Text style={[s.subjectTxt, { color: colors.accent }]} numberOfLines={1}>{session?.subject || 'N/A'}</Text>
+                  </View>
+                  <Text style={[s.periodTxt, { color: colors.textSecondary, marginLeft: 12 }]}>Period {(session?.periods || []).join(', ')}</Text>
+               </View>
 
-      {/* ── Scrollable student list ── */}
-      <View style={s.listWrap}>
-        <FlatList
-          data={filtered}
-          keyExtractor={(_, i) => String(i)}
-          contentContainerStyle={s.list}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
-              tintColor="#a78bfa" colors={['#a78bfa']} />
-          }
-          renderItem={({ item, index }) => (
-            <StudentRow student={item} index={index} />
-          )}
-          ListEmptyComponent={
-            <View style={s.empty}>
-              <Text style={s.emptyTxt}>
-                {allStudents.length === 0
-                  ? 'No student data recorded.'
-                  : 'No students match this filter.'}
-              </Text>
+               <View style={s.cardMain}>
+                  <View style={s.statCol}>
+                    <Text style={[s.statVal, { color: colors.text }]}>{pList.length}</Text>
+                    <Text style={[s.statLabel, { color: colors.present }]}>Present</Text>
+                  </View>
+                  <View style={[s.statDivider, { backgroundColor: colors.border }]} />
+                  <View style={s.statCol}>
+                    <Text style={[s.statVal, { color: colors.text }]}>{aList.length}</Text>
+                    <Text style={[s.statLabel, { color: colors.absent }]}>Absent</Text>
+                  </View>
+                  <View style={[s.statDivider, { backgroundColor: colors.border }]} />
+                  <View style={s.statCol}>
+                    <Text style={[s.statVal, { color: colors.text }]}>{students.length}</Text>
+                    <Text style={[s.statLabel, { color: colors.textSecondary }]}>Total</Text>
+                  </View>
+               </View>
+
+               <View style={[s.groupStrip, { backgroundColor: isDark ? colors.bg : '#f8fafc', borderColor: colors.border }]}>
+                  <Text style={[s.groupLabel, { color: colors.textSecondary }]}>CLASS GROUP</Text>
+                  <Text style={[s.groupName, { color: colors.text, flex: 1, textAlign: 'right', marginLeft: 10 }]} numberOfLines={1}>{session?.group || '—'}</Text>
+               </View>
             </View>
-          }
-          ListFooterComponent={<View style={{ height: 24 }} />}
-        />
-      </View>
+
+            <View style={s.filterRow}>
+              <FilterTab label="All" count={students.length} active={filter === 'ALL'} onPress={() => setFilter('ALL')} />
+              <FilterTab label="Present" count={pList.length} active={filter === 'P'} onPress={() => setFilter('P')} />
+              <FilterTab label="Absent" count={aList.length} active={filter === 'A'} onPress={() => setFilter('A')} />
+            </View>
+          </>
+        }
+        renderItem={({ item, index }) => <StudentRow student={item} index={index} />}
+      />
     </SafeAreaView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1 },
-
-  // Fixed top
-  topSection: {
-    backgroundColor: '#312e81',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingTop: 14, 
+    paddingBottom: 20,
+    gap: 16,
   },
-  infoRow:     { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  infoPill:    { backgroundColor: GLASS, borderRadius: 10, paddingHorizontal: 10,
-                 paddingVertical: 5, borderWidth: 1, borderColor: GLASS_BDR },
-  infoPillTxt: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
-
-  subject:  { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 2 },
-  classLbl: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 10 },
-
-  barRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  barBg:   { flex: 1, height: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 2, overflow: 'hidden' },
-  barFill: { height: 4, borderRadius: 2, backgroundColor: '#a78bfa' },
-  barPct:  { fontSize: 13, fontWeight: '800', color: '#c4b5fd', minWidth: 36, textAlign: 'right' },
-
-  statsRow: { flexDirection: 'row', gap: 8 },
-  statPill: { flex: 1, backgroundColor: GLASS, borderRadius: 12, paddingVertical: 10,
-              alignItems: 'center', borderWidth: 1, borderColor: GLASS_BDR },
-  statVal:  { fontSize: 20, fontWeight: '800', color: '#c4b5fd' },
-  statLbl:  { fontSize: 9, color: 'rgba(255,255,255,0.4)', fontWeight: '600',
-              textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
-
-  // Filter tab bar
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#ede9fe',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(109,40,217,0.08)',
+  backBtn: {
+    width: 44, height: 44, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
-  tab:          { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                  paddingVertical: 7, borderRadius: 10, gap: 6,
-                  backgroundColor: 'rgba(109,40,217,0.08)', borderWidth: 1, borderColor: 'transparent' },
-  tabActive:    { backgroundColor: '#6d28d9', borderColor: '#6d28d9' },
-  tabTxt:       { fontSize: 12, fontWeight: '600', color: '#6d28d9' },
-  tabTxtActive: { color: '#fff' },
-  tabBadge:         { backgroundColor: 'rgba(109,40,217,0.12)', borderRadius: 8,
-                      paddingHorizontal: 6, paddingVertical: 1 },
-  tabBadgeActive:   { backgroundColor: 'rgba(255,255,255,0.25)' },
-  tabBadgeTxt:      { fontSize: 10, fontWeight: '700', color: '#6d28d9' },
-  tabBadgeTxtActive:{ color: '#fff' },
+  headerTitleWrap: { flex: 1 },
+  headerTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+  headerDate: { fontSize: 13, fontWeight: '600', marginTop: 1 },
 
-  // List
-  listWrap: { flex: 1, backgroundColor: '#ede9fe' },
-  list:     { paddingHorizontal: 16, paddingTop: 10 },
+  list: { paddingHorizontal: 20, paddingBottom: 60 },
 
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f5f3ff',
-    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 6,
-    borderWidth: 1, borderColor: 'rgba(109,40,217,0.10)',
+  mainCard: { 
+    borderRadius: 24, padding: 20, borderWidth: 1, 
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 6,
+    marginBottom: 24,
   },
-  serial:    { fontSize: 11, fontWeight: '700', color: '#a09bc7', width: 22, textAlign: 'right', marginRight: 10 },
-  studentName: { fontSize: 13, fontWeight: '600', color: '#1e1b4b' },
-  studentRoll: { fontSize: 11, color: '#a09bc7', marginTop: 1 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  subjectBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  subjectTxt: { fontSize: 14, fontWeight: '800' },
+  periodTxt: { fontSize: 13, fontWeight: '700' },
 
-  statusPill:      { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  pillPresent:     { backgroundColor: '#ecfdf5' },
-  pillAbsent:      { backgroundColor: '#fef2f2' },
-  pillTxt:         { fontSize: 13, fontWeight: '800' },
-  pillTxtPresent:  { color: '#059669' },
-  pillTxtAbsent:   { color: '#dc2626' },
+  cardMain: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24 },
+  statCol: { alignItems: 'center' },
+  statVal: { fontSize: 24, fontWeight: '900', marginBottom: 4 },
+  statLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statDivider: { width: 1, height: 30, opacity: 0.5 },
 
-  empty:    { alignItems: 'center', paddingTop: 60 },
-  emptyTxt: { fontSize: 14, color: '#8b83c3', textAlign: 'center' },
+  groupStrip: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+    padding: 14, borderRadius: 16, borderStyle: 'dashed', borderWidth: 1.5,
+  },
+  groupLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  groupName: { fontSize: 14, fontWeight: '800' },
 
-  center:   { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#312e81' },
-  loadTxt:  { marginTop: 12, color: 'rgba(255,255,255,0.4)', fontSize: 14 },
-  errTitle: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 6 },
-  errMsg:   { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 20 },
-  retryBtn: { backgroundColor: 'rgba(167,139,250,0.2)', borderWidth: 1, borderColor: 'rgba(167,139,250,0.4)',
-              paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12 },
-  retryTxt: { color: '#c4b5fd', fontWeight: '700', fontSize: 14 },
+  filterRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  tab: { 
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
+    paddingVertical: 10, borderRadius: 14, borderWidth: 1, gap: 8 
+  },
+  tabBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  tabBadgeTxt: { fontSize: 11, fontWeight: '800' },
+  tabTxt: { fontSize: 13, fontWeight: '700' },
+
+  row: { 
+    flexDirection: 'row', alignItems: 'center', py: 14, gap: 16, borderBottomWidth: 1,
+    paddingVertical: 14,
+  },
+  serial: { fontSize: 12, fontWeight: '800', width: 24 },
+  studentName: { fontSize: 15, fontWeight: '700' },
+  statusPill: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  pillTxt: { fontSize: 14, fontWeight: '900' },
 });

@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, Switch, StatusBar, Linking,
+  ScrollView, Alert, StatusBar, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getTeacherId, saveTeacherId, getServerUrl, saveServerUrl, getTrainerName, saveTrainerName } from '../api/client';
+import ScreenHeader from '../components/ScreenHeader';
+import { useTheme } from '../context/ThemeContext';
+import { Feather } from '@expo/vector-icons';
 
 export default function SettingsScreen({ navigation }) {
+  const { colors, isDark } = useTheme();
   const [teacherId,    setTeacherId]    = useState('');
   const [trainerName,  setTrainerName]  = useState('');
   const [serverUrl,    setServerUrl]    = useState('');
@@ -35,7 +39,7 @@ export default function SettingsScreen({ navigation }) {
 
   const saveName = async () => {
     const v = trainerName.trim();
-    if (!v) { Alert.alert('Error', 'Trainer Name cannot be empty.'); return; }
+    if (!v) { Alert.alert('Error', 'Faculty Name cannot be empty.'); return; }
     await saveTrainerName(v);
     setTrainerSaved(true);
     setEditingName(false);
@@ -51,287 +55,180 @@ export default function SettingsScreen({ navigation }) {
     setTimeout(() => setUrlSaved(false), 2000);
   };
 
-  const testConnection = async () => {
+  const testServer = async () => {
     setTesting(true);
     try {
-      const res  = await fetch(serverUrl.trim().replace(/\/$/, '') + '/');
+      const res = await fetch(`${serverUrl}/`);
       const data = await res.json();
-      Alert.alert('✓ Connected', data.message || 'Server is reachable.');
-    } catch (e) {
-      Alert.alert('✗ Failed', e.message);
+      if (data.status === 'ok') Alert.alert('Success', 'Server is online and responding.');
+      else throw new Error();
+    } catch {
+      Alert.alert('Error', 'Could not reach server. Verify URL.');
     } finally { setTesting(false); }
   };
 
+  const Row = ({ label, value, onEdit, isEditing, onChange, onSave, saved, placeholder, icon }) => (
+    <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={s.secHeader}>
+        <View style={s.secTitleRow}>
+          <Feather name={icon} size={16} color={colors.primary} style={s.secIcon} />
+          <Text style={[s.secLabel, { color: colors.textSecondary }]}>{label}</Text>
+        </View>
+        {!isEditing && (
+          <TouchableOpacity onPress={onEdit}>
+            <Text style={[s.editBtn, { color: colors.primary }]}>Edit</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      
+      {isEditing ? (
+        <View style={s.editWrap}>
+          <TextInput
+            style={[s.input, { color: colors.text, backgroundColor: isDark ? colors.bg : '#f8fafc', borderColor: colors.border }]}
+            value={value}
+            onChangeText={onChange}
+            autoFocus
+            placeholder={placeholder}
+            placeholderTextColor={colors.textMuted}
+          />
+          <View style={s.btnRow}>
+             <TouchableOpacity style={[s.cancelBtn, { borderColor: colors.border }]} onPress={() => onEdit()}>
+               <Text style={[s.cancelBtnTxt, { color: colors.textSecondary }]}>Cancel</Text>
+             </TouchableOpacity>
+             <TouchableOpacity style={[s.saveBtn, { backgroundColor: colors.primary }]} onPress={onSave}>
+               <Text style={s.saveBtnTxt}>Save Changes</Text>
+             </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={s.valRow}>
+          <Text style={[s.val, { color: colors.text }]}>{value || 'Not set'}</Text>
+          {saved && <Text style={s.saved}>✓ Saved</Text>}
+        </View>
+      )}
+    </View>
+  );
 
   return (
-    <SafeAreaView style={s.safe} edges={['bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#312e81" />
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={colors.statusBar} backgroundColor={colors.bg} />
+      <ScreenHeader title="Settings" />
+      
+      <ScrollView contentContainerStyle={s.scroll}>
+        <Text style={[s.groupHeader, { color: colors.primary }]}>ACCOUNT & IDENTITY</Text>
+        <Row
+          label="TEACHER ID"
+          icon="user"
+          value={teacherId}
+          isEditing={editingTeacher}
+          onEdit={() => setEditingTeacher(!editingTeacher)}
+          onChange={setTeacherId}
+          onSave={saveTeacher}
+          saved={teacherSaved}
+          placeholder="e.g. ET018"
+        />
+        <Row
+          label="NAME IN TIMETABLE"
+          icon="book"
+          value={trainerName}
+          isEditing={editingName}
+          onEdit={() => setEditingName(!editingName)}
+          onChange={setTrainerName}
+          onSave={saveName}
+          saved={trainerSaved}
+          placeholder="e.g. Himanshu Sharma"
+        />
 
-        {/* ── ACCOUNT ─────────────────────────────── */}
-        <Text style={s.groupLabel}>Account</Text>
-        <View style={s.group}>
-          {/* Teacher ID row */}
-        <View style={s.row}>
-            <View style={s.rowIcon}><Text style={s.rowIconTxt}>👤</Text></View>
-            <View style={s.rowBody}>
-              <Text style={s.rowTitle}>Teacher ID</Text>
-              {!editingTeacher ? (
-                <View style={s.editDisplayRow}>
-                  <Text style={s.editDisplayVal}>{teacherId || '(Not set)'}</Text>
-                  <TouchableOpacity style={s.editBtn} onPress={() => setEditingTeacher(true)} activeOpacity={0.8}>
-                    <Text style={s.editBtnTxt}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <Text style={s.rowSub}>Identifies your sessions across devices</Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={s.input}
-                      value={teacherId}
-                      onChangeText={t => { setTeacherId(t); setTeacherSaved(false); }}
-                      placeholder="e.g. ET018"
-                      placeholderTextColor="#94a3b8"
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                      returnKeyType="done"
-                      onSubmitEditing={saveTeacher}
-                      autoFocus
-                    />
-                    <TouchableOpacity
-                      style={[s.pill, teacherSaved && s.pillGreen]}
-                      onPress={saveTeacher} activeOpacity={0.8}
-                    >
-                      <Text style={s.pillTxt}>{teacherSaved ? '✓' : 'Save'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
+        <View style={{ height: 20 }} />
+        <Text style={[s.groupHeader, { color: colors.primary }]}>NETWORK CONFIG</Text>
+        <Row
+          label="SERVER URL"
+          icon="server"
+          value={serverUrl}
+          isEditing={editingUrl}
+          onEdit={() => setEditingUrl(!editingUrl)}
+          onChange={setServerUrl}
+          onSave={saveUrl}
+          saved={urlSaved}
+          placeholder="https://..."
+        />
+
+        <TouchableOpacity 
+          style={[s.testBtn, { borderColor: colors.primary }]} 
+          onPress={testServer} 
+          disabled={testing}
+        >
+          <Text style={[s.testBtnTxt, { color: colors.primary }]}>
+            {testing ? 'Testing...' : 'Test Server Connection'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 20 }} />
+        <Text style={[s.groupHeader, { color: colors.primary }]}>EXTERNAL</Text>
+        <TouchableOpacity 
+          style={[s.linkCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => Linking.openURL('https://github.com/himanshu8443/chalkpad-extension')}
+        >
+          <View style={[s.iconCircle, { backgroundColor: isDark ? colors.bg : '#ede9fe' }]}>
+            <Feather name="chrome" size={18} color={colors.primary} />
           </View>
-
-          <View style={s.divider} />
-
-          {/* Trainer Name row */}
-          <View style={s.row}>
-            <View style={s.rowIcon}><Text style={s.rowIconTxt}>🖋️</Text></View>
-            <View style={s.rowBody}>
-              <Text style={s.rowTitle}>Name in Timetable</Text>
-              {!editingName ? (
-                <View style={s.editDisplayRow}>
-                  <Text style={s.editDisplayVal}>{trainerName || '(Not set)'}</Text>
-                  <TouchableOpacity style={s.editBtn} onPress={() => setEditingName(true)} activeOpacity={0.8}>
-                    <Text style={s.editBtnTxt}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <Text style={s.rowSub}>Your exact name from the PDF schedule</Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={s.input}
-                      value={trainerName}
-                      onChangeText={t => { setTrainerName(t); setTrainerSaved(false); }}
-                      placeholder="e.g. Himanshu Sharma"
-                      placeholderTextColor="#94a3b8"
-                      autoCorrect={false}
-                      returnKeyType="done"
-                      onSubmitEditing={saveName}
-                      autoFocus
-                    />
-                    <TouchableOpacity
-                      style={[s.pill, trainerSaved && s.pillGreen]}
-                      onPress={saveName} activeOpacity={0.8}
-                    >
-                      <Text style={s.pillTxt}>{trainerSaved ? '✓' : 'Save'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
+          <View style={s.linkInfo}>
+             <Text style={[s.linkTitle, { color: colors.text }]}>Browser Extension</Text>
+             <Text style={[s.linkSub, { color: colors.textSecondary }]}>Download the Chrome extension</Text>
           </View>
-        </View>
+          <Feather name="external-link" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
 
-        {/* ── SERVER ──────────────────────────────── */}
-        <Text style={s.groupLabel}>Server</Text>
-        <View style={s.group}>
-          {/* URL row */}
-          <View style={s.row}>
-            <View style={s.rowIcon}><Text style={s.rowIconTxt}>🌐</Text></View>
-            <View style={s.rowBody}>
-              <Text style={s.rowTitle}>Server URL</Text>
-              {!editingUrl ? (
-                <View style={s.editDisplayRow}>
-                  <Text style={s.editDisplayVal} numberOfLines={1}>{serverUrl}</Text>
-                  <TouchableOpacity style={s.editBtn} onPress={() => setEditingUrl(true)} activeOpacity={0.8}>
-                    <Text style={s.editBtnTxt}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <Text style={s.rowSub}>Your Render deployment endpoint</Text>
-                  <View style={s.inputRow}>
-                    <TextInput
-                      style={s.input}
-                      value={serverUrl}
-                      onChangeText={t => { setServerUrl(t); setUrlSaved(false); }}
-                      placeholder="https://your-app.onrender.com"
-                      placeholderTextColor="#8b83c3"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="url"
-                      returnKeyType="done"
-                      onSubmitEditing={saveUrl}
-                      autoFocus
-                    />
-                    <TouchableOpacity
-                      style={[s.pill, urlSaved && s.pillGreen]}
-                      onPress={saveUrl} activeOpacity={0.8}
-                    >
-                      <Text style={s.pillTxt}>{urlSaved ? '✓' : 'Save'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </View>
-
-          <View style={s.divider} />
-
-          {/* Test connection */}
-          <TouchableOpacity style={s.row} onPress={testConnection} activeOpacity={0.7}>
-            <View style={s.rowIcon}><Text style={s.rowIconTxt}>📡</Text></View>
-            <View style={s.rowBody}>
-              <Text style={s.rowTitle}>{testing ? 'Testing…' : 'Test Connection'}</Text>
-              <Text style={s.rowSub}>Verify server is reachable</Text>
-            </View>
-            <Text style={s.chevron}>›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── EXTENSION ──────────────────────────────── */}
-        <Text style={s.groupLabel}>Browser Extension</Text>
-        <View style={s.group}>
-
-
-
-          {/* GitHub button */}
-          <TouchableOpacity
-            style={s.row}
-            onPress={() => Linking.openURL('https://github.com/GitDevHimanshu/chalkpad-extention').catch(() => Alert.alert('Error', 'Could not open link.'))}
-            activeOpacity={0.7}
-          >
-            <View style={s.rowIcon}><Text style={s.rowIconTxt}>⬇️</Text></View>
-            <View style={s.rowBody}>
-              <Text style={s.rowTitle}>Download Extension</Text>
-              <Text style={s.rowSub}>github.com/GitDevHimanshu/chalkpad-extention</Text>
-            </View>
-            <Text style={s.chevron}>›</Text>
-          </TouchableOpacity>
-
-          <View style={s.divider} />
-
-          {/* ZIP instructions */}
-          <TouchableOpacity
-            style={s.row}
-            onPress={() => Alert.alert(
-              'How to install',
-              '1. Open the GitHub link\n2. Click Code → Download ZIP\n3. Extract the ZIP folder\n4. Open Chrome browser\n5. Go to chrome://extensions\n6. Enable Developer Mode (top right)\n7. Click Load unpacked → select the extracted folder\n8. Done! Open Chalkpad and tap the extension icon.',
-              [{ text: 'Got it' }]
-            )}
-            activeOpacity={0.7}
-          >
-            <View style={s.rowIcon}><Text style={s.rowIconTxt}>📖</Text></View>
-            <View style={s.rowBody}>
-              <Text style={s.rowTitle}>Installation Guide</Text>
-              <Text style={s.rowSub}>Step by step for Chrome browser</Text>
-            </View>
-            <Text style={s.chevron}>›</Text>
-          </TouchableOpacity>
-
-        </View>
-
-        {/* ── ABOUT ───────────────────────────────── */}
-        <Text style={s.groupLabel}>About</Text>
-        <View style={s.group}>
-          {[
-            { icon:'✓', label:'App',      val:'Haziri' },
-            { icon:'🏷', label:'Version',  val:'1.0.0' },
-
-          ].map((item, i, arr) => (
-            <View key={item.label}>
-              <View style={s.row}>
-                <View style={s.rowIcon}><Text style={s.rowIconTxt}>{item.icon}</Text></View>
-                <View style={s.rowBody}>
-                  <Text style={s.rowTitle}>{item.label}</Text>
-                </View>
-                <Text style={s.rowVal}>{item.val}</Text>
-              </View>
-              {i < arr.length - 1 && <View style={s.divider} />}
-            </View>
-          ))}
-        </View>
-
+        <Text style={[s.footer, { color: colors.textMuted }]}>
+          Haziri v1.2.0 • Build 2024.4
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe:    { flex:1, backgroundColor:'#ede9fe' },
-  scroll:  { padding:16, paddingBottom:48 },
+  safe: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 120 },
 
-  groupLabel: {
-    fontSize:11, fontWeight:'700', color:'#6d28d9',
-    letterSpacing:1.2, textTransform:'uppercase',
-    marginBottom:8, marginLeft:4, marginTop:12,
+  groupHeader: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 12, marginTop: 10 },
+  section: { 
+    borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
   },
-  group: {
-    backgroundColor:'rgba(255,255,255,0.92)',
-    borderRadius:16, overflow:'hidden',
-    borderWidth:1, borderColor:'rgba(255,255,255,0.7)',
-    shadowColor:'#4c1d95', shadowOffset:{width:0,height:4},
-    shadowOpacity:0.15, shadowRadius:12, elevation:5,
-  },
+  secHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  secTitleRow: { flexDirection: 'row', alignItems: 'center' },
+  secIcon: { marginRight: 8 },
+  secLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  editBtn: { fontSize: 13, fontWeight: '800' },
 
-  row: {
-    flexDirection:'row', alignItems:'center',
-    paddingHorizontal:16, paddingVertical:14, gap:12,
-    backgroundColor:'transparent',
-  },
-  rowIcon: {
-    width:36, height:36, borderRadius:10,
-    backgroundColor:'rgba(109,40,217,0.15)',
-    alignItems:'center', justifyContent:'center',
-    flexShrink:0,
-  },
-  rowIconTxt: { fontSize:18 },
-  rowBody:    { flex:1 },
-  rowTitle:   { fontSize:14, fontWeight:'600', color:'#2d1b69', marginBottom:2 },
-  rowSub:     { fontSize:11, color:'#8b83c3', lineHeight:16 },
-  rowVal:     { fontSize:13, fontWeight:'700', color:'#6d28d9' },
-  chevron:    { fontSize:20, color:'#94a3b8', marginLeft:4 },
-  divider:    { height:1, backgroundColor:'rgba(109,40,217,0.08)', marginLeft:64 },
+  valRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  val: { fontSize: 16, fontWeight: '700' },
+  saved: { color: '#16a34a', fontSize: 12, fontWeight: '800' },
 
-  inputRow: { flexDirection:'row', gap:8, marginTop:10 },
-  input: {
-    flex:1, backgroundColor:'rgba(109,40,217,0.12)',
-    borderWidth:1, borderColor:'rgba(109,40,217,0.22)',
-    borderRadius:10, color:'#2d1b69',
-    fontSize:13, paddingHorizontal:12, paddingVertical:9,
+  editWrap: { marginTop: 4 },
+  input: { 
+    padding: 14, borderRadius: 12, fontSize: 15, fontWeight: '700', borderWidth: 1, marginBottom: 16
   },
-  pill: {
-    backgroundColor:'#6d28d9', borderRadius:10,
-    paddingHorizontal:14, justifyContent:'center', alignItems:'center',
+  btnRow: { flexDirection: 'row', gap: 10 },
+  saveBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  saveBtnTxt: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
+  cancelBtnTxt: { fontSize: 13, fontWeight: '800' },
+
+  testBtn: { 
+    marginTop: 4, paddingVertical: 15, borderRadius: 16, alignItems: 'center', borderWidth: 1.5, borderStyle: 'dashed'
   },
-  pillGreen: { backgroundColor:'#059669' },
-  pillTxt:   { fontSize:12, fontWeight:'700', color:'#fff' },
+  testBtnTxt: { fontSize: 14, fontWeight: '800' },
 
+  linkCard: { 
+    flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 24, borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
+  },
+  iconCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  linkInfo: { flex: 1 },
+  linkTitle: { fontSize: 15, fontWeight: '800' },
+  linkSub: { fontSize: 12, fontWeight: '600', marginTop: 2 },
 
-  editDisplayRow: { flexDirection:'row', alignItems:'center', marginTop:4, gap:8 },
-  editDisplayVal: { flex:1, fontSize:12, color:'#6d28d9', fontWeight:'500' },
-  editBtn:        { backgroundColor:'rgba(109,40,217,0.10)', borderWidth:1, borderColor:'rgba(109,40,217,0.2)',
-                    borderRadius:8, paddingHorizontal:12, paddingVertical:5 },
-  editBtnTxt:     { fontSize:11, fontWeight:'700', color:'#6d28d9' },
+  footer: { textAlign: 'center', marginTop: 40, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
 });

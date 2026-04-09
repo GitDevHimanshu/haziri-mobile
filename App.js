@@ -9,11 +9,18 @@ import SetupScreen from './src/screens/SetupScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import DetailScreen from './src/screens/DetailScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import TimetableScreen from './src/screens/TimetableScreen';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import FloatingTabBar from './src/components/FloatingTabBar';
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
 // ── Intro Screen ─────────────────────────────────────────────────
 function IntroScreen({ onDone }) {
+  const { colors, isDark } = useTheme();
   const iconScale = useRef(new Animated.Value(0.7)).current;
   const iconOpacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
@@ -21,36 +28,55 @@ function IntroScreen({ onDone }) {
 
   useEffect(() => {
     Animated.sequence([
-      // Icon pops in
       Animated.parallel([
         Animated.spring(iconScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
         Animated.timing(iconOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]),
-      // Text fades in
       Animated.timing(textOpacity, { toValue: 1, duration: 300, delay: 100, useNativeDriver: true }),
-      // Hold
       Animated.delay(900),
-      // Fade everything out
       Animated.timing(fadeOut, { toValue: 0, duration: 350, useNativeDriver: true }),
     ]).start(() => onDone());
   }, []);
 
   return (
-    <Animated.View style={[s.intro, { opacity: fadeOut }]}>
-      {/* Glow circle */}
-      <View style={s.glow} />
-      {/* Icon */}
+    <Animated.View style={[s.intro, { opacity: fadeOut, backgroundColor: colors.bg }]}>
+      <View style={[s.glow, { backgroundColor: colors.card, shadowColor: colors.primary }]} />
       <Animated.Image
         source={require('./assets/icon.png')}
         style={[s.introIcon, { opacity: iconOpacity, transform: [{ scale: iconScale }] }]}
         resizeMode="contain"
       />
-      {/* Text */}
       <Animated.View style={{ opacity: textOpacity, alignItems: 'center' }}>
-        <Text style={s.introName}>Haziri</Text>
-        <Text style={s.introSub}>A T T E N D A N C E</Text>
+        <Text style={[s.introName, { color: colors.text }]}>Haziri</Text>
+        <Text style={[s.introSub, { color: colors.primary }]}>A T T E N D A N C E</Text>
       </Animated.View>
     </Animated.View>
+  );
+}
+
+// ── Main Tab Navigator ───────────────────────────────────────────
+function MainTabNavigator() {
+  return (
+    <Tab.Navigator
+      tabBar={(props) => <FloatingTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="HomeTab" component={HomeScreen} />
+      <Tab.Screen name="SearchTab" component={HomeScreen} listeners={({ navigation }) => ({
+        tabPress: (e) => {
+          e.preventDefault();
+          navigation.navigate('HomeTab', { openSearch: true });
+        },
+      })} />
+      <Tab.Screen name="AddTab" component={HomeScreen} listeners={({ navigation }) => ({
+        tabPress: (e) => {
+          e.preventDefault();
+          navigation.navigate('HomeTab', { triggerAdd: true });
+        },
+      })} />
+      <Tab.Screen name="ScheduleTab" component={TimetableScreen} />
+      <Tab.Screen name="SettingsTab" component={SettingsScreen} />
+    </Tab.Navigator>
   );
 }
 
@@ -70,7 +96,9 @@ export default function App() {
   if (showIntro) {
     return (
       <SafeAreaProvider>
-        <IntroScreen onDone={() => setShowIntro(false)} />
+        <ThemeProvider>
+          <IntroScreen onDone={() => setShowIntro(false)} />
+        </ThemeProvider>
       </SafeAreaProvider>
     );
   }
@@ -83,37 +111,24 @@ export default function App() {
 
   if (!hasTeacher) return (
     <SafeAreaProvider>
-      <SetupScreen onDone={() => setHasTeacher(true)} />
+      <ThemeProvider>
+        <SetupScreen onDone={() => setHasTeacher(true)} />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator>
-          <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Detail" component={DetailScreen}
-            options={({ route }) => ({
-              title: route.params?.session?.group || 'Session Detail',
-              headerStyle: { backgroundColor: '#312e81' },
-              headerTintColor: '#ffffff',
-              headerTitleStyle: { fontWeight: '800', fontSize: 16 },
-              headerShadowVisible: false,
-              contentStyle: { backgroundColor: '#ede9fe' },
-            })}
-          />
-          <Stack.Screen name="Settings" component={SettingsScreen}
-            options={{
-              title: 'Settings',
-              headerStyle: { backgroundColor: '#312e81' },
-              headerTintColor: '#ffffff',
-              headerTitleStyle: { fontWeight: '800', fontSize: 16 },
-              headerShadowVisible: false,
-              contentStyle: { backgroundColor: '#ede9fe' },
-            }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <ThemeProvider>
+        <NavigationContainer>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Main" component={MainTabNavigator} />
+            <Stack.Screen name="Detail" component={DetailScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Timetable" component={TimetableScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

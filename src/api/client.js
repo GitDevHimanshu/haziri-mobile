@@ -39,60 +39,66 @@ export const saveServerUrl = async (url) => {
   await AsyncStorage.setItem('serverUrl', url.trim().replace(/\/$/, ''));
 };
 
-// ── Fetch with timeout ────────────────────────────────────────────
-const fetchWithTimeout = (url, options = {}, ms = 20000) => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
+// ── Fetch with automatic retry and long timeout ────────────────────
+const fetchWithRetry = async (url, options = {}, retries = 2, delay = 2000) => {
+  const timeoutMs = 45000; // Increased to 45s for Render.com cold starts
+  
+  for (let i = 0; i <= retries; i++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      
+      // Cloudflare 521 or standard error
+      if (res.status === 521 || res.status >= 500) {
+        if (i < retries) {
+          console.log(`[API] Server waking up (${res.status}). Retrying...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      if (i < retries) {
+        console.log(`[API] Connection failed. Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
 };
+
 const handle = async (res) => {
-  if (!res.ok) throw new Error(`Server error: HTTP ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 521) throw new Error('Server is waking up. Please wait a few seconds.');
+    throw new Error(`Server error: HTTP ${res.status}`);
+  }
   return res.json();
 };
 
 // ── API calls ─────────────────────────────────────────────────────
 export const fetchSessions = async ({ limit = 1000, search = '' } = {}) => {
   const [base, teacherId] = await Promise.all([getServerUrl(), getTeacherId()]);
-  return fetchWithTimeout(
+  return fetchWithRetry(
     `${base}/api/sessions?limit=${limit}&search=${encodeURIComponent(search)}&teacherId=${encodeURIComponent(teacherId)}`
   ).then(handle);
 };
 
 export const fetchSessionById = async (id) => {
   const base = await getServerUrl();
-  return fetchWithTimeout(`${base}/api/sessions/${id}`).then(handle);
+  return fetchWithRetry(`${base}/api/sessions/${id}`).then(handle);
 };
 
 export const fetchStats = async () => {
   const [base, teacherId] = await Promise.all([getServerUrl(), getTeacherId()]);
-  return fetchWithTimeout(`${base}/api/stats?teacherId=${encodeURIComponent(teacherId)}`).then(handle);
+  return fetchWithRetry(`${base}/api/stats?teacherId=${encodeURIComponent(teacherId)}`).then(handle);
 };
 
 export const deleteSession = async (id) => {
   const base = await getServerUrl();
-  return fetchWithTimeout(`${base}/api/sessions/${id}`, { method: 'DELETE' }).then(handle);
-};
-
-export const uploadTimetablePdf = async (fileUri, trainerName) => {
-  const base = await getServerUrl();
-  
-  const formData = new FormData();
-  formData.append('trainerName', trainerName);
-  formData.append('file', {
-    uri: fileUri,
-    type: 'application/pdf',
-    name: 'timetable.pdf'
-  });
-
-  const response = await fetch(`${base}/api/parse-timetable`, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      'Accept': 'application/json',
-      // DO NOT set Content-Type header manually for FormData in React Native
-    }
-  });
-
-  return handle(response);
+  return fetchWithRetry(`${base}/api/sessions/${id}`, { method: 'DELETE' }).then(handle);
 };
