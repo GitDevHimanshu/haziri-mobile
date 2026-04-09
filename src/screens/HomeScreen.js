@@ -420,7 +420,7 @@ export default function HomeScreen({ navigation, route }) {
     setParsing(false);
     if (entries && entries.length > 0) {
       await saveTimetable(entries);
-      const scheduledCount = await scheduleTimetableNotifications(entries);
+      const scheduledCount = await scheduleTimetableNotifications(entries, true);
       Alert.alert('Success', `Extracted ${entries.length} classes locally!\nScheduled ${scheduledCount} weekly class reminders.`);
       load();
     } else {
