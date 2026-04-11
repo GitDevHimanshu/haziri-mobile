@@ -100,10 +100,10 @@ function CalendarModal({ visible, selectedDate, onClose, onSelect }) {
           </View>
 
           <TouchableOpacity 
-            onPress={() => { onSelect(new Date()); onClose(); }}
+            onPress={onClose}
             style={{ marginTop: 20, alignItems: 'center', paddingVertical: 10 }}
           >
-            <Text style={{ fontWeight: '900', color: isDark ? '#fff' : colors.primary, fontSize: 13, textDecorationLine: 'underline', letterSpacing: 0.5 }}>GO TO TODAY</Text>
+            <Text style={{ fontWeight: '900', color: '#ef4444', fontSize: 13, textDecorationLine: 'underline', letterSpacing: 0.5 }}>CLOSE</Text>
           </TouchableOpacity>
         </View>
       </View>
