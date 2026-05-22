@@ -2,7 +2,7 @@
   "expo": {
     "name": "Haziri",
     "slug": "chalkpad-attendance",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -30,6 +30,12 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a5322b8c-d6cd-4470-a83e-dd709e2420d7"
+    }
   }
 }

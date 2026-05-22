@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, Image, Animated, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, Animated, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import * as Updates from 'expo-updates';
 
 import { getTeacherId } from './src/api/client';
 import SetupScreen from './src/screens/SetupScreen';
@@ -87,6 +88,25 @@ export default function App() {
   const [hasTeacher, setHasTeacher] = useState(false);
 
   useEffect(() => {
+    async function checkUpdates() {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          Alert.alert(
+            'Update Available',
+            'A new update was downloaded in the background. The app will now restart to apply it.',
+            [{ text: 'OK', onPress: () => Updates.reloadAsync() }]
+          );
+        }
+      } catch (error) {
+        console.log('Error checking for updates:', error);
+      }
+    }
+    
+    // Check for updates on startup
+    checkUpdates();
+
     getTeacherId().then(id => {
       setHasTeacher(id !== 'default' && !!id);
       setReady(true);

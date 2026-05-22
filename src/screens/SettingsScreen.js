@@ -24,7 +24,7 @@ const Row = ({ label, value, onEdit, isEditing, onChange, onSave, saved, placeho
           </TouchableOpacity>
         )}
       </View>
-      
+
       {isEditing ? (
         <View style={s.editWrap}>
           <TextInput
@@ -36,12 +36,12 @@ const Row = ({ label, value, onEdit, isEditing, onChange, onSave, saved, placeho
             placeholderTextColor={colors.textMuted}
           />
           <View style={s.btnRow}>
-             <TouchableOpacity style={[s.cancelBtn, { borderColor: colors.border }]} onPress={() => onEdit()}>
-               <Text style={[s.cancelBtnTxt, { color: colors.textSecondary }]}>Cancel</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={[s.saveBtn, { backgroundColor: colors.primary }]} onPress={onSave}>
-               <Text style={s.saveBtnTxt}>Save Changes</Text>
-             </TouchableOpacity>
+            <TouchableOpacity style={[s.cancelBtn, { borderColor: colors.border }]} onPress={() => onEdit()}>
+              <Text style={[s.cancelBtnTxt, { color: colors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.saveBtn, { backgroundColor: colors.primary }]} onPress={onSave}>
+              <Text style={s.saveBtnTxt}>Save Changes</Text>
+            </TouchableOpacity>
           </View>
         </View>
       ) : (
@@ -56,16 +56,16 @@ const Row = ({ label, value, onEdit, isEditing, onChange, onSave, saved, placeho
 
 export default function SettingsScreen({ navigation }) {
   const { colors, isDark } = useTheme();
-  const [teacherId,    setTeacherId]    = useState('');
-  const [trainerName,  setTrainerName]  = useState('');
-  const [serverUrl,    setServerUrl]    = useState('');
+  const [teacherId, setTeacherId] = useState('');
+  const [trainerName, setTrainerName] = useState('');
+  const [serverUrl, setServerUrl] = useState('');
   const [teacherSaved, setTeacherSaved] = useState(false);
   const [trainerSaved, setTrainerSaved] = useState(false);
-  const [urlSaved,     setUrlSaved]     = useState(false);
+  const [urlSaved, setUrlSaved] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState(false);
-  const [editingName,    setEditingName]    = useState(false);
-  const [editingUrl,   setEditingUrl]   = useState(false);
-  const [testing,      setTesting]      = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     getTeacherId().then(id => setTeacherId(id === 'default' ? '' : id.toUpperCase()));
@@ -118,7 +118,7 @@ export default function SettingsScreen({ navigation }) {
     <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={colors.statusBar} backgroundColor={colors.bg} />
       <ScreenHeader title="Settings" />
-      
+
       <ScrollView contentContainerStyle={s.scroll}>
         <Text style={[s.groupHeader, { color: colors.primary }]}>ACCOUNT & IDENTITY</Text>
         <Row
@@ -158,9 +158,9 @@ export default function SettingsScreen({ navigation }) {
           placeholder="https://..."
         />
 
-        <TouchableOpacity 
-          style={[s.testBtn, { borderColor: colors.primary }]} 
-          onPress={testServer} 
+        <TouchableOpacity
+          style={[s.testBtn, { borderColor: colors.primary }]}
+          onPress={testServer}
           disabled={testing}
         >
           <Text style={[s.testBtnTxt, { color: colors.primary }]}>
@@ -170,16 +170,16 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={{ height: 20 }} />
         <Text style={[s.groupHeader, { color: colors.primary }]}>EXTERNAL</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[s.linkCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => Linking.openURL('https://github.com/himanshu8443/chalkpad-extension')}
+          onPress={() => Linking.openURL('https://github.com/GitDevHimanshu/chalkpad-extention')}
         >
           <View style={[s.iconCircle, { backgroundColor: isDark ? colors.bg : '#ede9fe' }]}>
             <Feather name="chrome" size={18} color={colors.primary} />
           </View>
           <View style={s.linkInfo}>
-             <Text style={[s.linkTitle, { color: colors.text }]}>Browser Extension</Text>
-             <Text style={[s.linkSub, { color: colors.textSecondary }]}>Download the Chrome extension</Text>
+            <Text style={[s.linkTitle, { color: colors.text }]}>Browser Extension</Text>
+            <Text style={[s.linkSub, { color: colors.textSecondary }]}>Download the Chrome extension</Text>
           </View>
           <Feather name="external-link" size={16} color={colors.textMuted} />
         </TouchableOpacity>
@@ -197,7 +197,7 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 120 },
 
   groupHeader: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 12, marginTop: 10 },
-  section: { 
+  section: {
     borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
   },
@@ -212,7 +212,7 @@ const s = StyleSheet.create({
   saved: { color: '#16a34a', fontSize: 12, fontWeight: '800' },
 
   editWrap: { marginTop: 4 },
-  input: { 
+  input: {
     padding: 14, borderRadius: 12, fontSize: 15, fontWeight: '700', borderWidth: 1, marginBottom: 16
   },
   btnRow: { flexDirection: 'row', gap: 10 },
@@ -221,12 +221,12 @@ const s = StyleSheet.create({
   cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
   cancelBtnTxt: { fontSize: 13, fontWeight: '800' },
 
-  testBtn: { 
+  testBtn: {
     marginTop: 4, paddingVertical: 15, borderRadius: 16, alignItems: 'center', borderWidth: 1.5, borderStyle: 'dashed'
   },
   testBtnTxt: { fontSize: 14, fontWeight: '800' },
 
-  linkCard: { 
+  linkCard: {
     flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 24, borderWidth: 1,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
   },
