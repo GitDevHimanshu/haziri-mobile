@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 
-export default function ScreenHeader({ title, subtext }) {
+export default function ScreenHeader({ title, subtext, rightElement }) {
   const { isDark, toggleTheme, colors } = useTheme();
   const [teacherId, setTeacherId] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -58,6 +58,7 @@ export default function ScreenHeader({ title, subtext }) {
         </View>
         
         <View style={h.rightWrap}>
+          {rightElement}
           <TouchableOpacity 
             style={[h.themeToggle, { backgroundColor: colors.card, borderColor: colors.border }]} 
             onPress={toggleTheme}
@@ -157,28 +158,28 @@ const h = StyleSheet.create({
   themeToggle: {
     width: 38, height: 36, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 3, elevation: 1,
   },
 
   teacherBadge: { 
     height: 36,
-    borderWidth: 1.5, 
+    borderWidth: 1, 
     borderRadius: 12, 
     paddingHorizontal: 12, 
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
   },
   teacherBadgeTxt: { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     padding: 20,
   },
@@ -186,13 +187,15 @@ const h = StyleSheet.create({
     justifyContent: 'center',
   },
   modalContent: {
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 4,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -221,7 +224,6 @@ const h = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
   saveBtnDisabled: { opacity: 0.7 },
   saveBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800' },

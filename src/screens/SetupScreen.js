@@ -95,12 +95,12 @@ const s = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
 
   logoWrap: { alignItems: 'center', marginBottom: 40 },
-  logoCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 16, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6 },
+  logoCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   logoIcon: { color: '#fff', fontSize: 32, fontWeight: '900' },
   appName: { fontSize: 36, fontWeight: '900', letterSpacing: -2 },
   appSub: { fontSize: 13, fontWeight: '600', marginTop: 4, letterSpacing: 0.5, textTransform: 'uppercase' },
 
-  card: { width: '100%', padding: 24, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 6 },
+  card: { width: '100%', padding: 24, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 3 },
   cardTitle: { fontSize: 18, fontWeight: '800', marginBottom: 10 },
   cardSub: { fontSize: 13, lineHeight: 20, marginBottom: 24 },
 
@@ -109,7 +109,7 @@ const s = StyleSheet.create({
   hint: { fontSize: 11, fontStyle: 'italic', marginTop: 4 },
   error: { color: '#dc2626', fontSize: 13, marginTop: 18, fontWeight: '700', textAlign: 'center' },
 
-  btn: { paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 24, width: '100%', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
+  btn: { paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 24, width: '100%' },
   btnTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
   footer: { fontSize: 11, marginTop: 32, textAlign: 'center', fontWeight: '500' },

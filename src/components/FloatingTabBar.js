@@ -56,7 +56,7 @@ export default function FloatingTabBar({ state, navigation, descriptors }) {
         <TabBtn icon="search"   active={activeRoute === 'SearchTab'}   onPress={() => onTab('SearchTab')} />
         <TabBtn icon="plus"     active={activeRoute === 'AddTab'}      onPress={() => onTab('AddTab')} />
         <TabBtn icon="calendar" active={activeRoute === 'ScheduleTab'} onPress={() => onTab('ScheduleTab')} />
-        <TabBtn icon="settings" active={activeRoute === 'SettingsTab'} onPress={() => onTab('SettingsTab')} />
+        <TabBtn icon="user" active={activeRoute === 'SettingsTab'} onPress={() => onTab('SettingsTab')} />
       </View>
     </View>
   );
@@ -81,9 +81,9 @@ const s = StyleSheet.create({
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   tab: {
     flex: 1,

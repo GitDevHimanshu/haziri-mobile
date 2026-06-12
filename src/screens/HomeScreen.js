@@ -28,6 +28,12 @@ const SCREEN_W = Dimensions.get('window').width;
 function CalendarModal({ visible, selectedDate, onClose, onSelect }) {
   const { colors, isDark } = useTheme();
   const [viewDate, setViewDate] = useState(new Date(selectedDate));
+
+  useEffect(() => {
+    if (visible) {
+      setViewDate(new Date(selectedDate));
+    }
+  }, [visible, selectedDate]);
   
   const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
   const firstDay = (y, m) => new Date(y, m, 1).getDay();
@@ -52,6 +58,14 @@ function CalendarModal({ visible, selectedDate, onClose, onSelect }) {
 
   const isSelected = (d) => d && d.toDateString() === selectedDate.toDateString();
   const isFuture = (d) => d && d > new Date();
+  const isTodaySelected = selectedDate && new Date(selectedDate).toDateString() === new Date().toDateString();
+
+  const handleGoToToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    onSelect(today);
+    onClose();
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -99,12 +113,15 @@ function CalendarModal({ visible, selectedDate, onClose, onSelect }) {
             })}
           </View>
 
-          <TouchableOpacity 
-            onPress={onClose}
-            style={{ marginTop: 20, alignItems: 'center', paddingVertical: 10 }}
-          >
-            <Text style={{ fontWeight: '900', color: '#ef4444', fontSize: 13, textDecorationLine: 'underline', letterSpacing: 0.5 }}>CLOSE</Text>
-          </TouchableOpacity>
+          {!isTodaySelected && (
+            <TouchableOpacity 
+              onPress={handleGoToToday}
+              style={{ marginTop: 20, alignItems: 'center', paddingVertical: 10 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontWeight: '900', color: colors.primary, fontSize: 13, textDecorationLine: 'underline', letterSpacing: 0.5 }}>TODAY</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -242,10 +259,8 @@ function SearchOverlay({ visible, onClose, sessions, onPress, onDelete }) {
 }
 
 // ─── Session Card ─────────────────────────────────────────────────
-function SessionCard({ session, onPress, onDelete, onSwipeStart, onSwipeEnd }) {
+function SessionCard({ session, onPress, onDelete }) {
   const { colors, isDark } = useTheme();
-  const tx = useRef(new Animated.Value(0)).current;
-  const delOpacity = useRef(new Animated.Value(0)).current;
   const [expanded, setExpanded] = useState(false);
 
   const absent     = (session.absentRolls || []).length;
@@ -258,87 +273,64 @@ function SessionCard({ session, onPress, onDelete, onSwipeStart, onSwipeEnd }) {
   const groupShort = groupParts.length > 1 ? groupParts[groupParts.length - 1] : rawGroup;
   const classCode  = groupParts.length > 1 ? groupParts.slice(0, -1).join('-') : '';
 
-  const close = () => {
-    Animated.spring(tx, { toValue: 0, useNativeDriver: true }).start();
-    Animated.timing(delOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-    onSwipeEnd && onSwipeEnd();
-  };
-
-  const pan = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gg) => Math.abs(gg.dx) > 10 && Math.abs(gg.dy) < 15 && gg.dx < 0,
-    onPanResponderGrant: () => { onSwipeStart && onSwipeStart(); },
-    onPanResponderMove: (_, gg) => {
-      if (gg.dx < 0) {
-        tx.setValue(Math.max(gg.dx, -100));
-        delOpacity.setValue(Math.min(Math.abs(gg.dx) / 80, 1));
-      }
-    },
-    onPanResponderRelease: (_, gg) => {
-      if (gg.dx < -70) {
-        Animated.spring(tx, { toValue: -80, useNativeDriver: true }).start();
-        Animated.timing(delOpacity, { toValue: 1, duration: 100, useNativeDriver: true }).start();
-      } else close();
-    },
-    onPanResponderTerminate: close,
-  })).current;
-
   const confirmDelete = () => Alert.alert('Delete Session', 'Remove this session?', [
-    { text: 'Cancel', style: 'cancel', onPress: close },
-    { text: 'Delete', style: 'destructive', onPress: () => { onDelete(session._id); close(); } },
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: () => onDelete(session._id) },
   ]);
 
   return (
-    <View style={g.swipeWrap}>
-      <Animated.View style={[g.delBg, { opacity: delOpacity }]}>
-        <TouchableOpacity style={g.delBtn} onPress={confirmDelete}>
-          <Text style={g.delTxt}>Delete</Text>
-        </TouchableOpacity>
-      </Animated.View>
-      <Animated.View style={{ transform: [{ translateX: tx }] }} {...pan.panHandlers}>
-        <TouchableOpacity style={[g.card, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => { close(); onPress(session); }} activeOpacity={0.92}>
-          <View style={g.cardRow1}>
-            <View style={[g.sectionChip, { backgroundColor: isDark ? colors.bg : '#ede9fe' }]}>
-              <Text style={[g.sectionChipTxt, { color: colors.accent }]}>{groupShort}</Text>
-            </View>
-
-            <View style={g.cardMid}>
-              <Text style={[g.subjectTxt, { color: colors.text }]} numberOfLines={1}>{session.subject || '—'}</Text>
-              {!!classCode && <Text style={[g.classCode, { color: colors.textSecondary }]} numberOfLines={1}>{classCode}</Text>}
-            </View>
-
-            <View style={[g.periodChip, { backgroundColor: isDark ? colors.bg : 'rgba(79,70,229,0.05)' }]}>
-              <Text style={[g.periodChipLbl, { color: colors.textMuted }]}>Period</Text>
-              <Text style={[g.periodChipVal, { color: colors.accent }]}>{periods}</Text>
-            </View>
+    <View style={g.cardWrap}>
+      <TouchableOpacity 
+        style={[g.card, { backgroundColor: colors.card, borderColor: colors.border }]} 
+        onPress={() => onPress(session)} 
+        onLongPress={confirmDelete}
+        delayLongPress={500}
+        activeOpacity={0.92}
+      >
+        <View style={g.cardRow1}>
+          <View style={[g.sectionChip, { backgroundColor: isDark ? colors.bg : '#ede9fe' }]}>
+            <Text style={[g.sectionChipTxt, { color: colors.accent }]}>{groupShort}</Text>
           </View>
 
-          <View style={[g.barBg, { backgroundColor: isDark ? colors.bg : '#f1f5f9' }]}>
-            <View style={[g.barFill, { width: pct + '%', backgroundColor: colors.primary }]} />
+          <View style={g.cardMid}>
+            <Text style={[g.subjectTxt, { color: colors.text }]} numberOfLines={1}>{session.subject || '—'}</Text>
+            {!!classCode && <Text style={[g.classCode, { color: colors.textSecondary }]} numberOfLines={1}>{classCode}</Text>}
           </View>
 
-          <View style={g.statsRow}>
-            <Text style={[g.siNum, { color: colors.text }]}>{total}</Text>
-            <Text style={[g.siLbl, { color: colors.textSecondary }]}> total</Text>
-            <Text style={[g.siDot, { color: colors.textMuted }]}>  ·  </Text>
-            <Text style={[g.siNum, { color: colors.present }]}>{present}</Text>
-            <Text style={[g.siLbl, { color: colors.present }]}> present</Text>
-            <Text style={[g.siDot, { color: colors.textMuted }]}>  ·  </Text>
-            <Text style={[g.siNum, absent > 0 ? { color: colors.absent } : { color: colors.textSecondary }]}>{absent}</Text>
-            <Text style={[g.siLbl, absent > 0 ? { color: colors.absent } : { color: colors.textSecondary }]}> absent</Text>
-            <View style={{ flex: 1 }} />
-            <Text style={[g.time, { color: colors.textMuted }]}>{relativeTime(session.submittedAt)}</Text>
+          <View style={[g.periodChip, { backgroundColor: isDark ? colors.bg : 'rgba(79,70,229,0.05)' }]}>
+            <Text style={[g.periodChipLbl, { color: colors.textMuted }]}>Period</Text>
+            <Text style={[g.periodChipVal, { color: colors.accent }]}>{periods}</Text>
           </View>
+        </View>
 
-          {absent > 0 && (
-            <TouchableOpacity style={[g.rollsToggle, { borderTopColor: colors.border }]} onPress={() => setExpanded(v => !v)}>
-              <Text style={[g.rollsToggleTxt, { color: colors.textSecondary }]}>
-                {expanded ? '▲  Hide rolls' : '▼  ' + absent + ' absent · tap to view'}
-              </Text>
-              {expanded && <Text style={[g.rollsText, { color: colors.textSecondary }]}>{(session.absentRolls || []).join('  ·  ')}</Text>}
-            </TouchableOpacity>
-          )}
-        </TouchableOpacity>
-      </Animated.View>
+        <View style={[g.barBg, { backgroundColor: isDark ? colors.bg : '#f1f5f9' }]}>
+          <View style={[g.barFill, { width: pct + '%', backgroundColor: colors.primary }]} />
+        </View>
+
+        <View style={g.statsRow}>
+          <Text style={[g.siNum, { color: colors.text }]}>{total}</Text>
+          <Text style={[g.siLbl, { color: colors.textSecondary }]}> total</Text>
+          <Text style={[g.siDot, { color: colors.textMuted }]}>  ·  </Text>
+          <Text style={[g.siNum, { color: colors.present }]}>{present}</Text>
+          <Text style={[g.siLbl, { color: colors.present }]}> present</Text>
+          <Text style={[g.siDot, { color: colors.textMuted }]}>  ·  </Text>
+          <Text style={[g.siNum, absent > 0 ? { color: colors.absent } : { color: colors.textSecondary }]}>{absent}</Text>
+          <Text style={[g.siLbl, absent > 0 ? { color: colors.absent } : { color: colors.textSecondary }]}> absent</Text>
+          
+          <View style={{ flex: 1 }} />
+          
+          <Text style={[g.time, { color: colors.textMuted }]}>{pct}%</Text>
+        </View>
+
+        {absent > 0 && (
+          <TouchableOpacity style={[g.rollsToggle, { borderTopColor: colors.border }]} onPress={() => setExpanded(v => !v)}>
+            <Text style={[g.rollsToggleTxt, { color: colors.textSecondary }]}>
+              {expanded ? '▲  Hide rolls' : '▼  ' + absent + ' absent · tap to view'}
+            </Text>
+            {expanded && <Text style={[g.rollsText, { color: colors.textSecondary }]}>{(session.absentRolls || []).join('  ·  ')}</Text>}
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -571,9 +563,8 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const pagePan = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gg) => !cardSwiping.current && Math.abs(gg.dx) > 40 && Math.abs(gg.dy) < 30,
+    onMoveShouldSetPanResponder: (_, gg) => Math.abs(gg.dx) > 40 && Math.abs(gg.dy) < 30,
     onPanResponderRelease: (_, gg) => {
-      if (cardSwiping.current) return;
       const cur = currentDateRef.current;
       if (gg.dx < -40 && cur.getTime() < todayRef.current.getTime()) animateTo('left', addDays(cur, 1));
       else if (gg.dx > 40) animateTo('right', addDays(cur, -1));
@@ -644,9 +635,7 @@ export default function HomeScreen({ navigation, route }) {
             renderItem={({ item }) => (
               <SessionCard session={item}
                 onPress={sess => { setSelectedSession(sess); setDetailVisible(true); }}
-                onDelete={handleDelete}
-                onSwipeStart={() => { cardSwiping.current = true; }}
-                onSwipeEnd={() => { cardSwiping.current = false; }} />
+                onDelete={handleDelete} />
             )}
             ListEmptyComponent={
               <View style={g.emptyWrap}>
@@ -704,12 +693,9 @@ const g = StyleSheet.create({
   overlayEmptyIco: { fontSize: 40, marginBottom: 16 },
   overlayEmptyTxt: { fontSize: 14, fontWeight: '500' },
 
-  swipeWrap: { marginBottom: 16 },
-  delBg: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 80, backgroundColor: '#ef4444', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  delBtn: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
-  delTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  cardWrap: { marginBottom: 16 },
 
-  card: { borderRadius: 24, padding: 18, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 15, elevation: 4 },
+  card: { borderRadius: 24, padding: 18, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
   cardRow1: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   sectionChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   sectionChipTxt: { fontSize: 14, fontWeight: '900' },
@@ -737,7 +723,7 @@ const g = StyleSheet.create({
   miniHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   miniHeaderBar: { width: 3, height: 12, borderRadius: 2, marginRight: 8 },
   miniHeader: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase' },
-  miniCard: { borderRadius: 24, padding: 16, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 5 },
+  miniCard: { borderRadius: 24, padding: 16, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
   miniTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
   miniSubject: { fontSize: 14, fontWeight: '800', lineHeight: 20, flex: 1, marginRight: 12 },
   miniTimeBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
@@ -749,7 +735,7 @@ const g = StyleSheet.create({
   miniRoomTxt: { fontSize: 11, fontWeight: '900', marginLeft: 4 },
 
   pagerWrap: { paddingHorizontal: 16, marginBottom: 12, marginTop: 10 },
-  pager: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 },
+  pager: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, paddingVertical: 10, paddingHorizontal: 10, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
   pagerArrow: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
   pagerCenter: { flex: 1, alignItems: 'center' },
   pagerLabel: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },

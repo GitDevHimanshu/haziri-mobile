@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, StatusBar, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getTimetable } from '../api/client';
+import { getTimetable, saveTimetable } from '../api/client';
 import { Feather } from '@expo/vector-icons';
 import { TimetableScreenSkeleton } from '../components/SkeletonLoader';
 import ScreenHeader from '../components/ScreenHeader';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
+import { scheduleTimetableNotifications } from '../utils/notifications';
 
 const DAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const JS_DAYS   = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -21,6 +22,42 @@ export default function TimetableScreen({ navigation }) {
 
   const todayName = JS_DAYS[new Date().getDay()]; // e.g. "Tuesday"
   const todayLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+
+  const handleClearTimetable = () => {
+    Alert.alert(
+      'Clear Timetable',
+      'Are you sure you want to clear your current timetable? This will also cancel all scheduled notifications for these classes.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive', 
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await saveTimetable([]);
+              await scheduleTimetableNotifications([], true);
+              setTimetable([]);
+            } catch (err) {
+              Alert.alert('Error', 'Failed to clear timetable.');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const clearButton = timetable.length > 0 ? (
+    <TouchableOpacity 
+      style={[s.headerAction, { backgroundColor: colors.card, borderColor: colors.border }]} 
+      onPress={handleClearTimetable}
+      activeOpacity={0.7}
+    >
+      <Feather name="trash-2" size={18} color="#ef4444" />
+    </TouchableOpacity>
+  ) : null;
 
   useFocusEffect(
     useCallback(() => {
@@ -68,7 +105,7 @@ export default function TimetableScreen({ navigation }) {
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: colors.bg }]} edges={['bottom']}>
       <StatusBar barStyle={colors.statusBar} backgroundColor={colors.bg} />
-      <ScreenHeader title="Schedule" subtext={todayLabel} />
+      <ScreenHeader title="Schedule" subtext={todayLabel} rightElement={clearButton} />
 
       <ScrollView 
         ref={scrollRef}
@@ -139,6 +176,19 @@ export default function TimetableScreen({ navigation }) {
 
 const s = StyleSheet.create({
   safe: { flex: 1 },
+  headerAction: {
+    width: 38,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
+  },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   dayGroup: { marginBottom: 32 },
   dayHeaderRow: { marginBottom: 16, flexDirection: 'row', alignItems: 'center' },
@@ -150,7 +200,7 @@ const s = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2,
   },
   timeColumn: {
     width: 65,
