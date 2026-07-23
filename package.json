@@ -19,6 +19,7 @@
     "@react-navigation/native-stack": "^6.9.26",
     "expo": "~51.0.0",
     "expo-blur": "~13.0.3",
+    "expo-clipboard": "~6.0.3",
     "expo-device": "~6.0.2",
     "expo-document-picker": "~12.0.2",
     "expo-file-system": "~17.0.1",

@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, ActivityIndicator, RefreshControl,
   StatusBar, Animated, PanResponder, Alert, Dimensions, BackHandler,
-  Modal, Pressable
+  Modal, Pressable, Platform
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ import ScreenHeader from '../components/ScreenHeader';
 import { HomeScreenSkeleton } from '../components/SkeletonLoader';
 import { useTheme } from '../context/ThemeContext';
 import DetailModal from '../components/DetailModal';
+import * as Clipboard from 'expo-clipboard';
 
 const SCREEN_H = Dimensions.get('window').height;
 const SCREEN_W = Dimensions.get('window').width;
@@ -407,6 +408,7 @@ export default function HomeScreen({ navigation, route }) {
   const [showPicker, setShowPicker] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   const [detailVisible, setDetailVisible] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
   const parserRef = useRef(null);
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -417,7 +419,7 @@ export default function HomeScreen({ navigation, route }) {
       navigation.setParams({ openSearch: false });
     }
     if (route.params?.triggerAdd) {
-      startUploadTimetable();
+      setImportModalVisible(true);
       navigation.setParams({ triggerAdd: false });
     }
   }, [route.params]);
@@ -500,6 +502,172 @@ export default function HomeScreen({ navigation, route }) {
     } catch(e) {
       Alert.alert('Error', 'Failed to read PDF. ' + String(e));
       setParsing(false);
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    try {
+      const name = await getTrainerName();
+      const promptText = `You are a precise data extraction assistant specializing in university timetables. 
+Your task is to parse raw text, table structures, or copy-pasted content of a timetable and extract its schedule into a structured JSON array.
+
+Please follow these strict parsing rules and constraints to match the application's internal parser logic:
+
+### 1. Data Schema
+Extract the timetable entries into a JSON array of objects. Each object MUST have the following structure:
+- \`dayOfWeek\`: Normalised name of the day (e.g. "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Sunday").
+- \`startTime\`: ISO 8601 string of the start time (use the current date as the base date).
+- \`endTime\`: ISO 8601 string of the end time (use the current date as the base date).
+- \`timeRange\`: String formatted as "h:mm A - h:mm A" (e.g. "9:00 AM - 10:40 AM").
+- \`subject\`: String. The subject name or code.
+- \`roomCode\`: String. The room code, formatted as uppercase with no spaces (e.g., "CVR410R" instead of "CVR 410R").
+- \`batch\`: String. The batch code, typically containing a hyphen and no spaces (e.g., "BCA-4A").
+- \`group\`: String or null. Contains details if it is group-specific (e.g., "Group 1", "Group 2").
+
+### 2. Logic Constraints & Rules
+- **Exclude Saturdays**: Skip any timetable entries on "Saturday".
+- **Time Parsing & Merging**: 
+  - Standard time formats (e.g., \`9:00-10:40\` or \`10-12\`) should be converted to correct start and end times.
+  - If an entry spans across multiple consecutive periods/slots, merge them into a single entry, updating the final \`endTime\` and duration accordingly.
+- **Room Code Extraction**:
+  - Room codes follow a pattern of 1-4 letters, optional space/hyphen, 1-4 digits, and an optional 'R' at the end (e.g., "CVR 410R", "RJ-101", "CL 3").
+  - Clean and normalize them by stripping spaces/hyphens and converting to uppercase (e.g., "CVR-410R" -> "CVR410R").
+  - Do NOT mistake metadata tags like "GROUP", "BATCH", "BCA", "MCA", "BTECH" for room codes.
+- **Batch Extraction**:
+  - A batch is usually identified by a hyphen without spaces and must contain a digit (e.g. "BCA-4A").
+- **Group Extraction**:
+  - If a line contains the word "Group" (case-insensitive), classify it as the \`group\` field (e.g. "Group 1").
+- **Subject Extraction**:
+  - Any remaining unrecognized text in a timetable slot after removing room, batch, and group details should be combined and treated as the \`subject\`.
+
+### 3. Output Format
+Respond ONLY with the raw JSON array containing the extracted entries. Do not include markdown code block formatting (\`\`\`json) unless explicitly asked, and do not write any introductory or explanatory text.
+
+---
+Here is the timetable data to parse:
+`;
+      await Clipboard.setStringAsync(promptText);
+      Alert.alert('Copied!', 'The system prompt has been copied to your clipboard. You can paste it into Gemini AI with your timetable text.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to copy to clipboard. ' + String(e));
+    }
+  };
+
+  const handlePasteJson = async (jsonText) => {
+    if (!jsonText || !jsonText.trim()) {
+      Alert.alert('Validation Error', 'Please paste the JSON content.');
+      return;
+    }
+
+    try {
+      let cleanJson = jsonText.trim();
+      if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.replace(/^```(json)?/i, '').replace(/```$/, '').trim();
+      }
+
+      const parsed = JSON.parse(cleanJson);
+      
+      if (!Array.isArray(parsed)) {
+        Alert.alert('Validation Error', 'The pasted content must be a JSON array of objects.');
+        return;
+      }
+
+      const isValid = parsed.every(item => 
+        item &&
+        typeof item === 'object' &&
+        typeof item.dayOfWeek === 'string' &&
+        typeof item.subject === 'string'
+      );
+
+      if (!isValid) {
+        Alert.alert(
+          'Validation Error',
+          'Some entries in the JSON array are missing required fields (dayOfWeek or subject).'
+        );
+        return;
+      }
+
+      const normalizedEntries = parsed.map(item => {
+        let startTimeVal = item.startTime;
+        let endTimeVal = item.endTime;
+
+        const parseTimePart = (timeVal) => {
+          if (!timeVal) return { hours: 0, minutes: 0 };
+          
+          if (typeof timeVal === 'string') {
+            if (timeVal.includes('T')) {
+              // Extract the HH:MM part directly from ISO string: "2026-07-23T17:50:00.000Z"
+              const timeMatch = timeVal.match(/T(\d{2}):(\d{2})/);
+              if (timeMatch) {
+                return {
+                  hours: parseInt(timeMatch[1], 10),
+                  minutes: parseInt(timeMatch[2], 10)
+                };
+              }
+            }
+
+            // Match 24-hour format: "17:50" or "5:50"
+            const match24 = timeVal.match(/^(\d{1,2}):(\d{2})$/);
+            if (match24) {
+              return {
+                hours: parseInt(match24[1], 10),
+                minutes: parseInt(match24[2], 10)
+              };
+            }
+
+            // Match 12-hour format: "05:50 PM" or "5:50 PM"
+            const match12 = timeVal.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (match12) {
+              let h = parseInt(match12[1], 10);
+              const m = parseInt(match12[2], 10);
+              const ampm = match12[3].toUpperCase();
+              if (ampm === 'PM' && h < 12) h += 12;
+              if (ampm === 'AM' && h === 12) h = 0;
+              return { hours: h, minutes: m };
+            }
+          }
+
+          // Fallback to standard Date parsing
+          const d = new Date(timeVal);
+          if (!isNaN(d.getTime())) {
+            return { hours: d.getHours(), minutes: d.getMinutes() };
+          }
+          return { hours: 0, minutes: 0 };
+        };
+
+        const startParts = parseTimePart(startTimeVal);
+        const endParts = parseTimePart(endTimeVal);
+
+        const now = new Date();
+        const startLocalDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startParts.hours, startParts.minutes);
+        const endLocalDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endParts.hours, endParts.minutes);
+
+        return {
+          dayOfWeek: item.dayOfWeek,
+          startTime: startLocalDate.toISOString(),
+          endTime: endLocalDate.toISOString(),
+          timeRange: item.timeRange || 'N/A',
+          subject: item.subject,
+          roomCode: item.roomCode || '',
+          batch: item.batch || '',
+          group: item.group || null
+        };
+      });
+
+      const filteredEntries = normalizedEntries.filter(entry => entry.dayOfWeek !== 'Saturday');
+
+      if (filteredEntries.length === 0) {
+        Alert.alert('Notice', 'No classes found (classes on Saturday are ignored).');
+        return;
+      }
+
+      setImportModalVisible(false);
+      await saveTimetable(filteredEntries);
+      const scheduledCount = await scheduleTimetableNotifications(filteredEntries, true);
+      Alert.alert('Success', `Imported ${filteredEntries.length} classes manually!\nScheduled ${scheduledCount} weekly class reminders.`);
+      load();
+    } catch (e) {
+      Alert.alert('Parse Error', 'Failed to parse JSON. Please make sure the JSON format is correct.\n\nError: ' + e.message);
     }
   };
 
@@ -659,6 +827,14 @@ export default function HomeScreen({ navigation, route }) {
 
       <PdfParserWebView ref={parserRef} onResult={handleParseResult} onError={(e) => { setParsing(false); Alert.alert('Parse Error', e.message); }} />
 
+      <ImportTimetableModal
+        visible={importModalVisible}
+        onClose={() => setImportModalVisible(false)}
+        onUploadPdf={startUploadTimetable}
+        onCopyPrompt={handleCopyPrompt}
+        onPasteJson={handlePasteJson}
+      />
+
       <DetailModal 
         visible={detailVisible} 
         session={selectedSession} 
@@ -753,4 +929,255 @@ const g = StyleSheet.create({
   errMsg: { fontSize: 14, textAlign: 'center', marginBottom: 24, paddingHorizontal: 40 },
   retryBtn: { paddingHorizontal: 32, paddingVertical: 14, borderRadius: 16, borderWidth: 1.5 },
   retryTxt: { fontWeight: '900', fontSize: 15, textTransform: 'uppercase', letterSpacing: 1 },
+});
+
+function ImportTimetableModal({ visible, onClose, onUploadPdf, onCopyPrompt, onPasteJson }) {
+  const { colors, isDark } = useTheme();
+  const [isPasting, setIsPasting] = useState(false);
+  const [jsonText, setJsonText] = useState('');
+
+  useEffect(() => {
+    if (!visible) {
+      setIsPasting(false);
+      setJsonText('');
+    }
+  }, [visible]);
+
+  const handlePasteSubmit = () => {
+    onPasteJson(jsonText);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={imStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[imStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          
+          {/* Header */}
+          <View style={imStyles.header}>
+            <Text style={[imStyles.title, { color: colors.text }]}>Add Timetable</Text>
+            <TouchableOpacity onPress={onClose} style={[imStyles.closeBtn, { backgroundColor: isDark ? colors.bg : '#f1f5f9' }]}>
+              <Feather name="x" size={18} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          {!isPasting ? (
+            <View style={imStyles.content}>
+              <Text style={[imStyles.subtitle, { color: colors.textSecondary }]}>
+                Choose how you want to import your weekly schedule and set class reminders.
+              </Text>
+
+              {/* Option 1: PDF Upload */}
+              <TouchableOpacity 
+                style={[imStyles.optionCard, { backgroundColor: isDark ? colors.bg : '#f8fafc', borderColor: colors.border }]}
+                onPress={() => {
+                  onClose();
+                  onUploadPdf();
+                }}
+              >
+                <View style={[imStyles.iconCircle, { backgroundColor: isDark ? '#1e293b' : '#ede9fe' }]}>
+                  <Feather name="file-text" size={20} color={colors.primary} />
+                </View>
+                <View style={imStyles.optionInfo}>
+                  <Text style={[imStyles.optionTitle, { color: colors.text }]}>Upload PDF Timetable</Text>
+                  <Text style={[imStyles.optionDesc, { color: colors.textSecondary }]}>
+                    Select your official PDF timetable to extract schedules automatically.
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              {/* Option 2: Copy Gemini Prompt */}
+              <TouchableOpacity 
+                style={[imStyles.optionCard, { backgroundColor: isDark ? colors.bg : '#f8fafc', borderColor: colors.border }]}
+                onPress={onCopyPrompt}
+              >
+                <View style={[imStyles.iconCircle, { backgroundColor: isDark ? '#1e293b' : '#ede9fe' }]}>
+                  <Feather name="copy" size={20} color={colors.primary} />
+                </View>
+                <View style={imStyles.optionInfo}>
+                  <Text style={[imStyles.optionTitle, { color: colors.text }]}>1. Copy Gemini Prompt</Text>
+                  <Text style={[imStyles.optionDesc, { color: colors.textSecondary }]}>
+                    Copy the custom system instructions to feed into Gemini AI for extraction.
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              {/* Option 3: Paste JSON */}
+              <TouchableOpacity 
+                style={[imStyles.optionCard, { backgroundColor: isDark ? colors.bg : '#f8fafc', borderColor: colors.border }]}
+                onPress={() => setIsPasting(true)}
+              >
+                <View style={[imStyles.iconCircle, { backgroundColor: isDark ? '#1e293b' : '#ede9fe' }]}>
+                  <Feather name="clipboard" size={20} color={colors.primary} />
+                </View>
+                <View style={imStyles.optionInfo}>
+                  <Text style={[imStyles.optionTitle, { color: colors.text }]}>2. Paste Timetable JSON</Text>
+                  <Text style={[imStyles.optionDesc, { color: colors.textSecondary }]}>
+                    Paste the JSON structure returned by Gemini to setup your schedule.
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={imStyles.content}>
+              <View style={imStyles.backRow}>
+                <TouchableOpacity onPress={() => setIsPasting(false)} style={imStyles.backBtn}>
+                  <Feather name="arrow-left" size={16} color={colors.primary} />
+                  <Text style={[imStyles.backTxt, { color: colors.primary }]}>Back to options</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[imStyles.subtitle, { color: colors.textSecondary }]}>
+                Paste the JSON array extracted by Gemini below:
+              </Text>
+
+              <TextInput
+                multiline
+                style={[imStyles.textArea, { 
+                  backgroundColor: isDark ? colors.bg : '#f8fafc', 
+                  borderColor: colors.border,
+                  color: colors.text 
+                }]}
+                placeholder='[{"dayOfWeek": "Monday", "subject": "Math", ...}]'
+                placeholderTextColor={colors.textMuted}
+                value={jsonText}
+                onChangeText={setJsonText}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity 
+                style={[imStyles.submitBtn, { backgroundColor: colors.primary }]}
+                onPress={handlePasteSubmit}
+              >
+                <Feather name="check" size={18} color="#fff" />
+                <Text style={imStyles.submitBtnTxt}>Import & Set Reminders</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const imStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  sheet: {
+    borderRadius: 32,
+    padding: 24,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: {
+    marginTop: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  optionInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  optionDesc: {
+    fontSize: 11,
+    fontWeight: '600',
+    lineHeight: 15,
+  },
+  backRow: {
+    marginBottom: 14,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  backTxt: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginLeft: 6,
+  },
+  textArea: {
+    height: 180,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  submitBtnTxt: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
+  },
 });
