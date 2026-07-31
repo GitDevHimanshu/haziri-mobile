@@ -2,7 +2,7 @@
   "expo": {
     "name": "Haziri",
     "slug": "chalkpad-attendance",
-    "version": "2.0.1",
+    "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,7 +21,7 @@
         "backgroundColor": "#4f46e5"
       },
       "package": "com.yourname.haziri",
-      "versionCode": 3
+      "versionCode": 4
     },
     "extra": {
       "eas": {

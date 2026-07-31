@@ -546,10 +546,14 @@ Respond ONLY with the raw JSON array containing the extracted entries. Do not in
 ---
 Here is the timetable data to parse:
 `;
-      await Clipboard.setStringAsync(promptText);
-      Alert.alert('Copied!', 'The system prompt has been copied to your clipboard. You can paste it into Gemini AI with your timetable text.');
+      if (Clipboard && typeof Clipboard.setStringAsync === 'function') {
+        await Clipboard.setStringAsync(promptText);
+        Alert.alert('Copied!', 'The system prompt has been copied to your clipboard. You can paste it into Gemini AI with your timetable text.');
+      } else {
+        Alert.alert('Prompt Copied', 'Please select and copy the prompt text if your build does not support automatic clipboard.');
+      }
     } catch (e) {
-      Alert.alert('Error', 'Failed to copy to clipboard. ' + String(e));
+      Alert.alert('Notice', 'Clipboard unavailable on this device build.');
     }
   };
 
